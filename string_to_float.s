@@ -25,8 +25,6 @@ _string_to_float:
     movq %rsp, %rbp
 
     subq $8, %rsp   # parte_inteira = -8(%rbp)
-    subq $8, %rsp   # parte_fracionaria = -16(%rbp)
-    subq $16, %rsp   # resultado = -32(%rbp)
 
     call _string_to_int     # retorna parte inteira em %eax
     movl %eax, -8(%rbp)
@@ -79,8 +77,6 @@ _string_to_float:
     _fim_loop_fracionario:
     # aqui, temos o resultado da parte fracionária em xmm0
 
-    movq %xmm0, -16(%rbp)  # salva parte fracionária
-
     movl -8(%rbp), %eax  # pega a parte inteira
     cmp $0, tipo(%rip)  # 0 = float, 1 = double
     jne _soma_double
@@ -99,7 +95,7 @@ _string_to_float:
     # agora, xmm0 tem o resultado final somado
     
     _fim_func_float:
-        addq $32, %rsp
+        addq $8, %rsp
         popq %rbp
         ret
 
@@ -220,10 +216,6 @@ _converte_padrao_ieee754:
     subq $4, %rsp   # expoente = -4(%rbp)
     subq $16, %rsp   # mantissa = -20(%rbp)
     subq $16, %rsp   # expoente_bias = -36(%rbp)
-
-    # Aqui, você pode implementar a conversão para o padrão IEEE 754
-    # dependendo do tipo (float ou double) e armazenar o resultado
-    # na variável apropriada.
     
     addq $36, %rsp
     popq %rbp

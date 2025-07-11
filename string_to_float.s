@@ -12,12 +12,9 @@ _start:
    
     leaq entrada(%rip), %rdi    # ponteiro da string vai para %rdi
 
-    call _string_to_float
-
-
+    call _string_to_float   # resultado está em xmm0
 
     popq %rbp
-    movl %eax, %edi
     movq $60, %rax
     syscall
 
@@ -29,10 +26,7 @@ _string_to_float:
 
     subq $8, %rsp   # parte_inteira = -8(%rbp)
     subq $8, %rsp   # parte_fracionaria = -16(%rbp)
-    subq $4, %rsp   # resultado = -20(%rbp)
-    subq $4, %rsp   # expoente = -24(%rbp)
-    subq $4, %rsp   # mantissa = -28(%rbp)
-    subq $4, %rsp   # expoente_bias = -32(%rbp)
+    subq $16, %rsp   # resultado = -32(%rbp)
 
     call _string_to_int     # retorna parte inteira em %eax
     movl %eax, -8(%rbp)
@@ -72,19 +66,41 @@ _string_to_float:
             cmp $0, tipo(%rip)
             jne _if_double
             call _retorna_fracao_float
-            jmp _loop_fracionario
+            jmp _fim_if_float_ou_double
         _if_double:
             cmp $1, tipo(%rip)
             jne _fim_func_float
             call _retorna_fracao_double
 
-        incq %rdi
-        jmp _loop_fracionario
+        _fim_if_float_ou_double:
+            incq %rdi
+            jmp _loop_fracionario
 
     _fim_loop_fracionario:
+    # aqui, temos o resultado da parte fracionária em xmm0
 
+    movq %xmm0, -16(%rbp)  # salva parte fracionária
 
+    movl -8(%rbp), %eax  # pega a parte inteira
+    cmp $0, tipo(%rip)  # 0 = float, 1 = double
+    jne _soma_double
+
+    cvtsi2ss %eax, %xmm2
+    addss %xmm2, %xmm0
+    jmp _fim_soma
+
+    _soma_double:
+        cmp $1, tipo(%rip)
+        jne _fim_func_float
+        cvtsi2sd %eax, %xmm2
+        addsd %xmm2, %xmm0
+
+    _fim_soma:
+    # agora, xmm0 tem o resultado final somado
+    
     _fim_func_float:
+        addq $32, %rsp
+        popq %rbp
         ret
 
 
@@ -102,8 +118,7 @@ _retorna_fracao_float:
     mulss %xmm3, %xmm1       # xmm1 = xmm1 * 10.0
 
     popq %rbp
-
-ret
+    ret
 
 _retorna_fracao_double:
 
@@ -119,8 +134,7 @@ _retorna_fracao_double:
     mulsd %xmm3, %xmm1       # xmm1 = xmm1 * 10.0
 
     popq %rbp
-
-ret
+    ret
 
 _string_to_int:
 
@@ -172,7 +186,7 @@ _string_to_int:
         imull %edx, %eax         # resultado = resultado * sinal
         addq $12, %rsp           # desaloca as 3 variáveis locais
         popq %rbp
-ret
+    ret
 
 _char_para_digito:
 
@@ -197,3 +211,20 @@ _char_para_digito:
     _fim_func_aux:
         popq %rbp
         ret
+
+_converte_padrao_ieee754:
+
+    pushq %rbp
+    movq %rsp, %rbp
+
+    subq $4, %rsp   # expoente = -4(%rbp)
+    subq $16, %rsp   # mantissa = -20(%rbp)
+    subq $16, %rsp   # expoente_bias = -36(%rbp)
+
+    # Aqui, você pode implementar a conversão para o padrão IEEE 754
+    # dependendo do tipo (float ou double) e armazenar o resultado
+    # na variável apropriada.
+    
+    addq $36, %rsp
+    popq %rbp
+ret

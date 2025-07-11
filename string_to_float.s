@@ -1,5 +1,6 @@
 .section .data
 entrada:    .asciz "+12.125"
+tipo:       .long 0             # 0 = float, 1 = double
 
 .section .text
 .globl _start
@@ -11,7 +12,9 @@ _start:
    
     leaq entrada(%rip), %rdi    # ponteiro da string vai para %rdi
 
-    
+    call _string_to_float
+
+
 
     popq %rbp
     movl %eax, %edi
@@ -24,18 +27,37 @@ _string_to_float:
     pushq %rbp
     movq %rsp, %rbp
 
+    subq $8, %rsp   # parte_inteira = -8(%rbp)
+    subq $4, %rsp   # parte_fracionaria = -12(%rbp)
+    subq $4, %rsp   # resultado = -16(%rbp)
+    subq $4, %rsp   # expoente = -20(%rbp)
+    subq $4, %rsp   # mantissa = -24(%rbp)
+    subq $4, %rsp   # expoente_bias = -28(%rbp)
 
+    call _string_to_int     # retorna parte inteira em %eax
 
-
+    movl %eax, -8(%rbp)
     
-    subq $4, %rsp               # int sinal = -4(%rbp)
-    movl $0, -4(%rbp)           # sinal = 0
+    
+ret
+
+_string_to_int:
+
+    pushq %rbp
+    movq %rsp, %rbp
+    
+    subq $4, %rsp               # int resultado = -4(%rbp)
+    subq $4, %rsp               # int sinal = -8(%rbp)
+    subq $4, %rsp               # int digito = -12(%rbp)
+
+    movl $0, -4(%rbp)           # resultado = 0
+    movl $1, -8(%rbp)           # sinal = 1
 
     _if:
         movzbq (%rdi), %rax     # %al = caractere atual
         cmpb $'-', %al          # compara caractere atual com '-'
         jne _else
-        movl $1, -8(%rbp)      # sinal = 1
+        movl $-1, -8(%rbp)      # sinal = -1, pra multiplicar com resultado no final
         incq %rdi
         jmp _loop_func
     _else:
@@ -50,7 +72,7 @@ _string_to_float:
 
         call _char_para_digito
 
-        # se não for um dígito # precisa quebrar a execução do programa inteiro
+        # se não for um dígito
         cmpl $-1, %eax
         je _fim_func
 
@@ -63,7 +85,14 @@ _string_to_float:
         incq %rdi
         jmp _loop_func
 
+    _fim_func:
+        movl -8(%rbp), %edx      # %edx = sinal
+        movl -4(%rbp), %eax      # resultado
+        imull %edx, %eax         # resultado = resultado * sinal
+        addq $12, %rsp           # desaloca as 3 variáveis locais
+        popq %rbp
 ret
+
 
 _char_para_digito:
 

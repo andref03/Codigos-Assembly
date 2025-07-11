@@ -28,18 +28,46 @@ _string_to_float:
     movq %rsp, %rbp
 
     subq $8, %rsp   # parte_inteira = -8(%rbp)
-    subq $4, %rsp   # parte_fracionaria = -12(%rbp)
-    subq $4, %rsp   # resultado = -16(%rbp)
-    subq $4, %rsp   # expoente = -20(%rbp)
-    subq $4, %rsp   # mantissa = -24(%rbp)
-    subq $4, %rsp   # expoente_bias = -28(%rbp)
+    subq $8, %rsp   # parte_fracionaria = -16(%rbp)
+    subq $4, %rsp   # resultado = -20(%rbp)
+    subq $4, %rsp   # expoente = -24(%rbp)
+    subq $4, %rsp   # mantissa = -28(%rbp)
+    subq $4, %rsp   # expoente_bias = -32(%rbp)
 
     call _string_to_int     # retorna parte inteira em %eax
-
     movl %eax, -8(%rbp)
-    
-    
-ret
+
+    movl $10, %eax
+    cvtsi2sd %eax, %xmm1     # xmm1 = 10.0
+    movl $0, %eax
+    cvtsi2sd %eax, %xmm0     # xmm0 = 0.0
+
+    _if_ponto:
+        cmp $'.', (%rdi)
+        jne _fim__func_float
+        incq %rdi               # pula o ponto
+
+    _loop_fracionario:
+        movzbq (%rdi), %rax     # %al = caractere atual
+        cmpb $0, %al            # compara caractere atual com 0 (semelhante a '\0')
+        je _fim__loop_fracionario
+
+        call _char_para_digito  # retorno tá no %eax
+        
+        cmpl $-1, %eax          # se não for um dígito
+        je _fim__func_float
+
+        cvtsi2sd %eax, %xmm2
+        
+
+
+    _fim__loop_fracionario:
+
+
+
+    _fim__func_float:
+        ret
+
 
 _string_to_int:
 

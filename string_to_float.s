@@ -1,6 +1,6 @@
 .section .data
-entrada:    .asciz "+12.125"
-tipo:       .long 0             # 0 = float, 1 = double
+entrada:    .asciz "-1.5"
+tipo:       .long 1           # 0 = float, 1 = double
 
 .section .text
 .globl _start
@@ -14,6 +14,8 @@ _start:
 
     call _string_to_float   # resultado está em xmm0
 
+    call _converte_padrao_ieee754
+
     popq %rbp
     movq $60, %rax
     syscall
@@ -25,30 +27,32 @@ _string_to_float:
     movq %rsp, %rbp
 
     subq $8, %rsp   # parte_inteira = -8(%rbp)
+    subq $4, %rsp   # sinal = -12(%rbp)
 
     call _string_to_int     # retorna parte inteira em %eax
+
     movl %eax, -8(%rbp)
+    movl %edx, -12(%rbp)     # armazena o sinal
 
     movl $10, %eax
     movl $0, %ebx
 
     _is_float:
-        cmp $0, tipo(%rip)
+        cmpl $0, tipo(%rip)
         jne _is_double
         cvtsi2ss %eax, %xmm1     # xmm1 = 10.0
         cvtsi2ss %ebx, %xmm0     # xmm0 = 0.0
         jmp _if_ponto
     _is_double:
-        cmp $1, tipo(%rip)
+        cmpl $1, tipo(%rip)
         jne _fim_func_float
         cvtsi2sd %eax, %xmm1     # xmm1 = 10.0
         cvtsi2sd %ebx, %xmm0     # xmm0 = 0.0
 
     _if_ponto:
-        cmp $'.', (%rdi)
+        cmpb $'.', (%rdi)
         jne _fim_func_float
         incq %rdi               # pula o ponto
-
     
     _loop_fracionario:
         movzbq (%rdi), %rax     # %al = caractere atual
@@ -61,12 +65,12 @@ _string_to_float:
         je _fim_func_float
 
         _if_float:
-            cmp $0, tipo(%rip)
+            cmpl $0, tipo(%rip)
             jne _if_double
             call _retorna_fracao_float
             jmp _fim_if_float_ou_double
         _if_double:
-            cmp $1, tipo(%rip)
+            cmpl $1, tipo(%rip)
             jne _fim_func_float
             call _retorna_fracao_double
 
@@ -78,7 +82,18 @@ _string_to_float:
     # aqui, temos o resultado da parte fracionária em xmm0
 
     movl -8(%rbp), %eax  # pega a parte inteira
-    cmp $0, tipo(%rip)  # 0 = float, 1 = double
+
+    # se parte inteira é negativa, torna positiva agora para realizar soma
+    _if_negativo:
+        cmpq $0, -8(%rbp)
+        jge _soma
+        movl $-1, %ebx
+        imull %ebx, %eax
+        movl %eax, -8(%rbp)  # atualiza parte inteira para positiva
+
+    _soma:
+
+    cmpl $0, tipo(%rip)  # 0 = float, 1 = double
     jne _soma_double
 
     cvtsi2ss %eax, %xmm2
@@ -86,7 +101,7 @@ _string_to_float:
     jmp _fim_soma
 
     _soma_double:
-        cmp $1, tipo(%rip)
+        cmpl $1, tipo(%rip)
         jne _fim_func_float
         cvtsi2sd %eax, %xmm2
         addsd %xmm2, %xmm0
@@ -94,8 +109,24 @@ _string_to_float:
     _fim_soma:
     # agora, xmm0 tem o resultado final somado
     
+    _if_inteiro_negativo:
+        cmpl $-1, -12(%rbp)
+        jne _fim_func_float
+        movl $-1, %edx
+        if_float_negativo:
+            cmpl $0, tipo(%rip)
+            jne _if_double_negativo
+            cvtsi2ss %edx, %xmm1
+            mulss %xmm1, %xmm0
+        _if_double_negativo:
+            cmpl $1, tipo(%rip)
+            jne _fim_func_float
+            cvtsi2sd %edx, %xmm1
+            mulsd %xmm1, %xmm0
+
     _fim_func_float:
-        addq $8, %rsp
+    a:
+        addq $12, %rsp
         popq %rbp
         ret
 
@@ -161,7 +192,12 @@ _string_to_int:
         cmpb $0, %al            # compara caractere atual com 0 (semelhatne a '\0')
         je _fim_func
 
+        movl $0, %ecx
         call _char_para_digito
+
+        # se for ponto
+        cmpl $-1, %ecx
+        je _fim_func
 
         # se não for um dígito
         cmpl $-1, %eax
@@ -191,6 +227,8 @@ _char_para_digito:
     movzbq (%rdi), %rax         # %al = caractere atual
 
     _if_aux:
+        cmpb $'.', %al
+        je _ponto_encontrado
         cmpb $'0', %al          # compara caractere atual com char '0'
         jl _char_invalido
         cmpb $'9', %al          # compara caractere atual com char '9'
@@ -203,6 +241,10 @@ _char_para_digito:
     # se (%al < '0') ou (%al > '9'), não se trata de dígito
     _char_invalido:
         movl $-1, %eax
+        jmp _fim_func_aux
+
+    _ponto_encontrado:
+        movl $-1, %ecx
 
     _fim_func_aux:
         popq %rbp
@@ -219,4 +261,4 @@ _converte_padrao_ieee754:
     
     addq $36, %rsp
     popq %rbp
-ret
+    ret

@@ -1,5 +1,5 @@
 .section .data
-entrada:    .asciz "-1.5"
+entrada:    .asciz "761.0"
 tipo:       .long 1           # 0 = float, 1 = double
 
 .section .text
@@ -20,20 +20,18 @@ _start:
     movq $60, %rax
     syscall
 
-
 _string_to_float:
-    
     pushq %rbp
     movq %rsp, %rbp
 
     subq $8, %rsp   # parte_inteira = -8(%rbp)
     subq $4, %rsp   # sinal = -12(%rbp)
 
-    call _string_to_int     # retorna parte inteira em %eax
+    call _string_to_int
+    movl %eax, -8(%rbp)      # parte_inteira sempre positiva
+    movl %edx, -12(%rbp)     # sinal
 
-    movl %eax, -8(%rbp)
-    movl %edx, -12(%rbp)     # armazena o sinal
-
+    # para calcular a parte fracionária
     movl $10, %eax
     movl $0, %ebx
 
@@ -44,25 +42,21 @@ _string_to_float:
         cvtsi2ss %ebx, %xmm0     # xmm0 = 0.0
         jmp _if_ponto
     _is_double:
-        cmpl $1, tipo(%rip)
-        jne _fim_func_float
         cvtsi2sd %eax, %xmm1     # xmm1 = 10.0
         cvtsi2sd %ebx, %xmm0     # xmm0 = 0.0
 
     _if_ponto:
         cmpb $'.', (%rdi)
-        jne _fim_func_float
-        incq %rdi               # pula o ponto
+        jne _fim_loop_fracionario
+        incq %rdi
     
     _loop_fracionario:
-        movzbq (%rdi), %rax     # %al = caractere atual
-        cmpb $0, %al            # compara caractere atual com 0 (semelhante a '\0')
+        movzbq (%rdi), %rax
+        cmpb $0, %al
         je _fim_loop_fracionario
-
-        call _char_para_digito  # retorno tá no %eax
-        
-        cmpl $-1, %eax          # se não for um dígito
-        je _fim_func_float
+        call _char_para_digito
+        cmpl $-1, %eax
+        je _fim_loop_fracionario
 
         _if_float:
             cmpl $0, tipo(%rip)
@@ -70,8 +64,6 @@ _string_to_float:
             call _retorna_fracao_float
             jmp _fim_if_float_ou_double
         _if_double:
-            cmpl $1, tipo(%rip)
-            jne _fim_func_float
             call _retorna_fracao_double
 
         _fim_if_float_ou_double:
@@ -79,56 +71,97 @@ _string_to_float:
             jmp _loop_fracionario
 
     _fim_loop_fracionario:
-    # aqui, temos o resultado da parte fracionária em xmm0
+    # xmm0 agora contém a parte fracionária (ex: 0.5)
 
-    movl -8(%rbp), %eax  # pega a parte inteira
+    # pega a parte inteira positiva
+    movl -8(%rbp), %eax
 
-    # se parte inteira é negativa, torna positiva agora para realizar soma
-    _if_negativo:
-        cmpq $0, -8(%rbp)
-        jge _soma
-        movl $-1, %ebx
-        imull %ebx, %eax
-        movl %eax, -8(%rbp)  # atualiza parte inteira para positiva
-
+    # soma a parte fracionária e inteira
     _soma:
-
-    cmpl $0, tipo(%rip)  # 0 = float, 1 = double
-    jne _soma_double
-
-    cvtsi2ss %eax, %xmm2
-    addss %xmm2, %xmm0
-    jmp _fim_soma
-
+        cmpl $0, tipo(%rip)
+        jne _soma_double
+        # converte a parte inteira positiva para float
+        cvtsi2ss %eax, %xmm2
+        addss %xmm2, %xmm0
+        jmp _fim_soma
     _soma_double:
-        cmpl $1, tipo(%rip)
-        jne _fim_func_float
         cvtsi2sd %eax, %xmm2
         addsd %xmm2, %xmm0
 
     _fim_soma:
-    # agora, xmm0 tem o resultado final somado
-    
-    _if_inteiro_negativo:
-        cmpl $-1, -12(%rbp)
+    # xmm0 agora tem o valor absoluto do número
+
+    _aplica_sinal:
+        cmpl $-1, -12(%rbp)  # verifica sinal
         jne _fim_func_float
+
+        # se tá aqui, então o sinal é negativo
         movl $-1, %edx
-        if_float_negativo:
-            cmpl $0, tipo(%rip)
-            jne _if_double_negativo
-            cvtsi2ss %edx, %xmm1
-            mulss %xmm1, %xmm0
-        _if_double_negativo:
-            cmpl $1, tipo(%rip)
-            jne _fim_func_float
-            cvtsi2sd %edx, %xmm1
-            mulsd %xmm1, %xmm0
+        cmpl $0, tipo(%rip) # float
+        jne _aplica_sinal_double
+        
+        cvtsi2ss %edx, %xmm1
+        mulss %xmm1, %xmm0
+        jmp _fim_func_float
+
+    _aplica_sinal_double:
+        cvtsi2sd %edx, %xmm1
+        mulsd %xmm1, %xmm0
 
     _fim_func_float:
     a:
         addq $12, %rsp
         popq %rbp
         ret
+
+_string_to_int:
+    pushq %rbp
+    movq %rsp, %rbp
+    
+    subq $4, %rsp               # int resultado = -4(%rbp)
+    subq $4, %rsp               # int sinal = -8(%rbp)
+    subq $4, %rsp               # int digito = -12(%rbp)
+
+    movl $0, -4(%rbp)           # resultado = 0
+    movl $1, -8(%rbp)           # sinal = 1 (padrão)
+
+    _if:
+        movzbq (%rdi), %rax
+        cmpb $'-', %al
+        jne _else
+        movl $-1, -8(%rbp)      # sinal = -1
+        incq %rdi
+        jmp _loop_func
+    _else:
+        cmpb $'+', %al
+        jne _loop_func
+        incq %rdi
+
+    _loop_func:
+        movzbq (%rdi), %rax
+        cmpb $0, %al
+        je _fim_func
+        movl $0, %ecx
+        call _char_para_digito
+        cmpl $-1, %ecx          # se for ponto ".", para a leitura da parte inteira
+        je _fim_func
+        cmpl $-1, %eax
+        je _fim_func
+        movl %eax, -12(%rbp)
+        movl -4(%rbp), %eax
+        imull $10, %eax, %eax
+        addl -12(%rbp), %eax
+        movl %eax, -4(%rbp)
+        incq %rdi
+        jmp _loop_func
+
+    _fim_func:
+        movl -8(%rbp), %edx      # retorna sinal %edx
+        movl -4(%rbp), %eax      # retorna o valor absoluto %eax
+
+        addq $12, %rsp  # desaloca
+        popq %rbp
+    ret
 
 
 _retorna_fracao_float:
@@ -162,64 +195,6 @@ _retorna_fracao_double:
 
     popq %rbp
     ret
-
-_string_to_int:
-
-    pushq %rbp
-    movq %rsp, %rbp
-    
-    subq $4, %rsp               # int resultado = -4(%rbp)
-    subq $4, %rsp               # int sinal = -8(%rbp)
-    subq $4, %rsp               # int digito = -12(%rbp)
-
-    movl $0, -4(%rbp)           # resultado = 0
-    movl $1, -8(%rbp)           # sinal = 1
-
-    _if:
-        movzbq (%rdi), %rax     # %al = caractere atual
-        cmpb $'-', %al          # compara caractere atual com '-'
-        jne _else
-        movl $-1, -8(%rbp)      # sinal = -1, pra multiplicar com resultado no final
-        incq %rdi
-        jmp _loop_func
-    _else:
-        cmpb $'+', %al
-        jne _loop_func
-        incq %rdi
-
-    _loop_func:
-        movzbq (%rdi), %rax     # %al = caractere atual
-        cmpb $0, %al            # compara caractere atual com 0 (semelhatne a '\0')
-        je _fim_func
-
-        movl $0, %ecx
-        call _char_para_digito
-
-        # se for ponto
-        cmpl $-1, %ecx
-        je _fim_func
-
-        # se não for um dígito
-        cmpl $-1, %eax
-        je _fim_func
-
-        movl %eax, -12(%rbp)     # dígito = %eax
-        movl -4(%rbp), %eax      # %eax = resultado
-        imull $10, %eax, %eax    # %eax = %eax * 10
-        addl -12(%rbp), %eax     # %eax = %eax + dígito
-        movl %eax, -4(%rbp)      # resultado = %eax
-
-        incq %rdi
-        jmp _loop_func
-
-    _fim_func:
-        movl -8(%rbp), %edx      # %edx = sinal
-        movl -4(%rbp), %eax      # resultado
-        imull %edx, %eax         # resultado = resultado * sinal
-        addq $12, %rsp           # desaloca as 3 variáveis locais
-        popq %rbp
-    ret
-
 _char_para_digito:
 
     pushq %rbp

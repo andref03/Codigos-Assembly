@@ -38,12 +38,12 @@ _string_to_float:
     _is_float:
         cmpl $0, tipo(%rip)
         jne _is_double
-        cvtsi2ss %eax, %xmm1     # xmm1 = 10.0
-        cvtsi2ss %ebx, %xmm0     # xmm0 = 0.0
+        cvtsi2ss %eax, %xmm1     # xmm1 = 10
+        cvtsi2ss %ebx, %xmm0     # xmm0 = 0
         jmp _if_ponto
     _is_double:
-        cvtsi2sd %eax, %xmm1     # xmm1 = 10.0
-        cvtsi2sd %ebx, %xmm0     # xmm0 = 0.0
+        cvtsi2sd %eax, %xmm1     # xmm1 = 10
+        cvtsi2sd %ebx, %xmm0     # xmm0 = 0
 
     _if_ponto:
         cmpb $'.', (%rdi)
@@ -71,7 +71,7 @@ _string_to_float:
             jmp _loop_fracionario
 
     _fim_loop_fracionario:
-    # xmm0 agora contém a parte fracionária (ex: 0.5)
+    # xmm0 agora ja contém a parte fracionária
 
     # pega a parte inteira positiva
     movl -8(%rbp), %eax
@@ -109,7 +109,7 @@ _string_to_float:
         mulsd %xmm1, %xmm0
 
     _fim_func_float:
-    a:
+    # finalmente finaliza o cálculo e desaloca
         addq $12, %rsp
         popq %rbp
         ret
@@ -158,7 +158,6 @@ _string_to_int:
     _fim_func:
         movl -8(%rbp), %edx      # retorna sinal %edx
         movl -4(%rbp), %eax      # retorna o valor absoluto %eax
-
         addq $12, %rsp  # desaloca
         popq %rbp
     ret
@@ -170,28 +169,27 @@ _retorna_fracao_float:
     movq %rsp, %rbp
 
     cvtsi2ss %eax, %xmm2
-    divss %xmm1, %xmm2      # xmm2 = xmm2 / xmm1
-    addss %xmm2, %xmm0      # xmm0 = xmm0 + xmm2 (acumulando)
+
+    divss %xmm1, %xmm2
+    addss %xmm2, %xmm0      # acumula resultado em xmm0
 
     movl $10, %eax
-    cvtsi2ss %eax, %xmm3     # xmm3 = 10.0
-    mulss %xmm3, %xmm1       # xmm1 = xmm1 * 10.0
+    cvtsi2ss %eax, %xmm3     # xmm3 = 10
+    mulss %xmm3, %xmm1       # xmm1 = xmm1 * 10
 
     popq %rbp
     ret
 
 _retorna_fracao_double:
-
     pushq %rbp
     movq %rsp, %rbp
 
     cvtsi2sd %eax, %xmm2
-    divsd %xmm1, %xmm2      # xmm2 = xmm2 / xmm1
-    addsd %xmm2, %xmm0      # xmm0 = xmm0 + xmm2 (acumulando)
-
+    divsd %xmm1, %xmm2
+    addsd %xmm2, %xmm0      # acumula resultado em xmm0
     movl $10, %eax
-    cvtsi2sd %eax, %xmm3     # xmm3 = 10.0
-    mulsd %xmm3, %xmm1       # xmm1 = xmm1 * 10.0
+    cvtsi2sd %eax, %xmm3     # xmm3 = 10
+    mulsd %xmm3, %xmm1       # xmm1 = xmm1 * 10
 
     popq %rbp
     ret
@@ -238,8 +236,7 @@ _converte_padrao_ieee754:
     _rotina_float:
 
         # extraindo o sinal
-        movq $0, %r8                  # sinal = 0 (positivo)
-        cvtsi2ss %r8, %xmm1
+        pxor %xmm1, %xmm1             # sinal = 0 (positivo)
         ucomiss %xmm1, %xmm0          # compara resultado com 0
         jnb _float_positivo
         movq $1, %r8                  # sinal = 1 (negativo)
@@ -251,8 +248,7 @@ _converte_padrao_ieee754:
             movss %xmm1, %xmm0            # copia resultado absoluto para xmm0
 
         _float_ja_positivo:
-            # aqui vai calcular expoente
-
+            #  aqui vai calcularo expoente
             movq $0, %r9               # expoente = 0
             movl $2, %eax
             cvtsi2ss %eax, %xmm1
@@ -284,16 +280,16 @@ _converte_padrao_ieee754:
         movq $0, %r11               # i = 0
 
         _float_loop_mantissa:
-            cmpq $23, %r11              # compara i com 23 (bits da matissa de float)
+            cmpq $23, %r11              # float tem 23 bits na mantssa
             jae _float_fim_loop_mantissa
             mulss %xmm1, %xmm0          # xmm0 = xmm0 * 2
             ucomiss %xmm2, %xmm0
             jb _float_bit_mantissa_zero
-            movq $22, %rax              # bits_mantissa - 1
-            subq %r11, %rax             # 22 - i
-            movq $1, %rcx
-            shlq %cl, %rcx
-            orq %rcx, %r10
+            movq $22, %rcx      # rcx = 22
+            subq %r11, %rcx     # 22 - i
+            movq $1, %rax
+            shlq %cl, %rax
+            orq %rax, %r10
             subss %xmm2, %xmm0          # xmm0 = xmm0 - 1
         _float_bit_mantissa_zero:
             incq %r11
@@ -301,7 +297,6 @@ _converte_padrao_ieee754:
         
         _float_fim_loop_mantissa:
         # montagem do resultado final sendo float
-
         addq $127, %r9              # bias de float
         movq %r8, %rax              # rax = sinal
         shlq $31, %rax              # sinal << 31
@@ -311,14 +306,13 @@ _converte_padrao_ieee754:
         orq %r10, %rax
         jmp _fim_conversao
 
-    # a partir daqui, a lógica é a mesma de float, mas para double
+    # a partir daqui, a lógica é a mesma de float, mas "traduzi" ela para double
     # basicamente trocando ss para sd, e os valores de bias e bits da mantissa
         
     _rotina_double:
         
         # extraindo o sinal
-        movq $0, %r8                  # sinal = 0 (positivo)
-        cvtsi2sd %r8, %xmm1
+        pxor %xmm1, %xmm1             # sinal = 0 (positivo)
         ucomisd %xmm1, %xmm0          # compara resultado com 0
         jnb _double_positivo
         movq $1, %r8                  # sinal = 1 (negativo)
@@ -330,8 +324,7 @@ _converte_padrao_ieee754:
             movsd %xmm1, %xmm0            # copia resultado absoluto para xmm0
         
         _double_ja_positivo:
-            # aqui vai calcular expoente
-
+            # aqui vai calculanod expoente
             movq $0, %r9               # expoente = 0
             movl $2, %eax
             cvtsi2sd %eax, %xmm1
@@ -368,11 +361,11 @@ _converte_padrao_ieee754:
                 mulsd %xmm1, %xmm0          # xmm0 = xmm0 * 2
                 ucomisd %xmm2, %xmm0
                 jb _double_bit_mantissa_zero
-                movq $51, %rax              # bits_mantissa - 1
-                subq %r11, %rax             # 51 - i
-                movq $1, %rcx
-                shlq %cl, %rcx
-                orq %rcx, %r10
+                movq $51, %rcx      # rcx = 51
+                subq %r11, %rcx     # 51 - i
+                movq $1, %rax
+                shlq %cl, %rax
+                orq %rax, %r10
                 subsd %xmm2, %xmm0          # xmm0 = xmm0 - 1
             _double_bit_mantissa_zero:
                 incq %r11
@@ -391,5 +384,7 @@ _converte_padrao_ieee754:
             orq %r10, %rax
 
     _fim_conversao:
-        popq %rbp
+    # nessa função de conversão, basicamente implementei para float, e depois só "traduzi" para double 
+    # (mudando poucos detalhes); depende do tipo que escolhe no início (0 ou 1)
+        leave
         ret

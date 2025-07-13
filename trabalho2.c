@@ -52,6 +52,7 @@ uint64_t string_para_ieee754(const char *str, TipoIEEE754 tipo) {
         numero /= 2.0;
         expoente++;
     }
+    
     while (numero < 1.0) {
         numero *= 2.0;
         expoente--;

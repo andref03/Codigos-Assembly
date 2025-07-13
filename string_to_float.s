@@ -1,6 +1,6 @@
 .section .data
-entrada:    .asciz "761.0"
-tipo:       .long 1           # 0 = float, 1 = double
+entrada:    .asciz "-3.078"
+tipo:       .long 0           # 0 = float, 1 = double
 
 .section .text
 .globl _start
@@ -225,15 +225,171 @@ _char_para_digito:
         popq %rbp
         ret
 
-_converte_padrao_ieee754:
 
+_converte_padrao_ieee754:
+    
+    # aqui, xmm0 contém o resultado já
     pushq %rbp
     movq %rsp, %rbp
 
-    subq $4, %rsp   # expoente = -4(%rbp)
-    subq $16, %rsp   # mantissa = -20(%rbp)
-    subq $16, %rsp   # expoente_bias = -36(%rbp)
-    
-    addq $36, %rsp
-    popq %rbp
-    ret
+    cmpl $0, tipo(%rip) # float
+    jne _rotina_double
+
+    _rotina_float:
+
+        # extraindo o sinal
+        movq $0, %r8                  # sinal = 0 (positivo)
+        cvtsi2ss %r8, %xmm1
+        ucomiss %xmm1, %xmm0          # compara resultado com 0
+        jnb _float_positivo
+        movq $1, %r8                  # sinal = 1 (negativo)
+
+        _float_positivo:
+            cmpq $0, %r8
+            je _float_ja_positivo         # sinal == 0, já é positivo
+            subss %xmm0, %xmm1
+            movss %xmm1, %xmm0            # copia resultado absoluto para xmm0
+
+        _float_ja_positivo:
+            # aqui vai calcular expoente
+
+            movq $0, %r9               # expoente = 0
+            movl $2, %eax
+            cvtsi2ss %eax, %xmm1
+
+        _float_loop_maior_2:
+            ucomiss %xmm1, %xmm0
+            jb _float_fim_loop_maior_2
+            divss %xmm1, %xmm0
+            incq %r9
+            jmp _float_loop_maior_2
+        _float_fim_loop_maior_2:
+            movl $1, %eax
+            cvtsi2ss %eax, %xmm2        # xmm2 = 1
+        _float_loop_menor_1:
+            movl $0, %ebx
+            cvtsi2ss %ebx, %xmm3
+            ucomiss %xmm3, %xmm0
+            jbe _float_fim_loop_menor_1
+            ucomiss %xmm0, %xmm2
+            jnb _float_fim_loop_menor_1
+            mulss %xmm1, %xmm0
+            decq %r9
+            jmp _float_loop_menor_1
+        _float_fim_loop_menor_1:
+            subss %xmm2, %xmm0          # xmm0 = xmm0 - 1
+
+        # lógica para calcular a mantissa
+        movq $0, %r10               # mantissa = 0
+        movq $0, %r11               # i = 0
+
+        _float_loop_mantissa:
+            cmpq $23, %r11              # compara i com 23 (bits da matissa de float)
+            jae _float_fim_loop_mantissa
+            mulss %xmm1, %xmm0          # xmm0 = xmm0 * 2
+            ucomiss %xmm2, %xmm0
+            jb _float_bit_mantissa_zero
+            movq $22, %rax              # bits_mantissa - 1
+            subq %r11, %rax             # 22 - i
+            movq $1, %rcx
+            shlq %cl, %rcx
+            orq %rcx, %r10
+            subss %xmm2, %xmm0          # xmm0 = xmm0 - 1
+        _float_bit_mantissa_zero:
+            incq %r11
+            jmp _float_loop_mantissa
+        
+        _float_fim_loop_mantissa:
+        # montagem do resultado final sendo float
+
+        addq $127, %r9              # bias de float
+        movq %r8, %rax              # rax = sinal
+        shlq $31, %rax              # sinal << 31
+        movq %r9, %rcx              # rcx = expoente bias
+        shlq $23, %rcx              # expoente bias << 23
+        orq %rcx, %rax
+        orq %r10, %rax
+        jmp _fim_conversao
+
+    # a partir daqui, a lógica é a mesma de float, mas para double
+    # basicamente trocando ss para sd, e os valores de bias e bits da mantissa
+        
+    _rotina_double:
+        
+        # extraindo o sinal
+        movq $0, %r8                  # sinal = 0 (positivo)
+        cvtsi2sd %r8, %xmm1
+        ucomisd %xmm1, %xmm0          # compara resultado com 0
+        jnb _double_positivo
+        movq $1, %r8                  # sinal = 1 (negativo)
+
+        _double_positivo:
+            cmpq $0, %r8
+            je _double_ja_positivo         # sinal == 0, já é positivo
+            subsd %xmm0, %xmm1
+            movsd %xmm1, %xmm0            # copia resultado absoluto para xmm0
+        
+        _double_ja_positivo:
+            # aqui vai calcular expoente
+
+            movq $0, %r9               # expoente = 0
+            movl $2, %eax
+            cvtsi2sd %eax, %xmm1
+            
+        _double_loop_maior_2:
+            ucomisd %xmm1, %xmm0
+            jb _double_fim_loop_maior_2
+            divsd %xmm1, %xmm0
+            incq %r9
+            jmp _double_loop_maior_2
+        _double_fim_loop_maior_2:
+            movl $1, %eax
+            cvtsi2sd %eax, %xmm2        # xmm2 = 1
+        _double_loop_menor_1:
+            movl $0, %ebx
+            cvtsi2sd %ebx, %xmm3
+            ucomisd %xmm3, %xmm0
+            jbe _double_fim_loop_menor_1
+            ucomisd %xmm0, %xmm2
+            jnb _double_fim_loop_menor_1
+            mulsd %xmm1, %xmm0
+            decq %r9
+            jmp _double_loop_menor_1
+        _double_fim_loop_menor_1:
+            subsd %xmm2, %xmm0          # xmm0 = xmm0 - 1
+
+        _double_mantissa:
+            movq $0, %r10               # mantissa = 0
+            movq $0, %r11               # i = 0
+
+            _double_loop_mantissa:
+                cmpq $52, %r11              # compara i com 52 (bits da matissa de double)
+                jae _double_fim_loop_mantissa
+                mulsd %xmm1, %xmm0          # xmm0 = xmm0 * 2
+                ucomisd %xmm2, %xmm0
+                jb _double_bit_mantissa_zero
+                movq $51, %rax              # bits_mantissa - 1
+                subq %r11, %rax             # 51 - i
+                movq $1, %rcx
+                shlq %cl, %rcx
+                orq %rcx, %r10
+                subsd %xmm2, %xmm0          # xmm0 = xmm0 - 1
+            _double_bit_mantissa_zero:
+                incq %r11
+                jmp _double_loop_mantissa
+        
+        _double_fim_loop_mantissa:
+            addq $1023, %r9         # bias de double
+
+        _double_montagem:
+            # montagem do resultado final sendo double
+            movq %r8, %rax          # rax = sinal
+            shlq $63, %rax          # sinal << 63
+            movq %r9, %rcx          # rcx = expoente bias
+            shlq $52, %rcx          # expoente bias << 52
+            orq %rcx, %rax 
+            orq %r10, %rax
+
+    _fim_conversao:
+        popq %rbp
+        ret

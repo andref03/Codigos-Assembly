@@ -1,68 +1,80 @@
-.section .data
 .section .text
-.global _start
+.globl _start
+
+_quantidade_pares:
+	pushq %rbp
+	movq %rsp, %rbp
+	# alocando a variavel i -4(%rbp)
+	subq $4, %rsp
+	# alocando a variavel pares -8(%rbp)
+	subq $4, %rsp
+
+	# salva o registrador %rbx
+	pushq %rbx
+
+	movl $0, -8(%rbp)   # pares
+	movl $0, -4(%rbp)   # i
+_for:
+	movl -4(%rbp), %ebx
+	cmpl %ebx, %esi  # i  %esi =  tam =  10
+     jle _end_for
+	# %rdi = &vetor[0]
+	movl -4(%rbp), %edx
+	movslq %edx, %rdx
+	movl  (%rdi,%rdx,4), %eax
+	movl $2, %ebx
+	movl $0, %edx  # necessario para calcular o resto da divisao
+	idivl %ebx
+      cmpl $0, %edx
+	jne _end_if
+	incl -8(%rbp)	# pares++
+     _end_if: 
+	incl -4(%rbp)	# i++
+	jmp _for
+
+_end_for:
+	# restaura o valor do registrador %rbx
+	popq %rbx
+	movl -8(%rbp), %eax
+	# desalocando as variaveis i e pares
+	addq $8, %rsp
+	popq %rbp
+	ret
 
 _start:
+	pushq %rbp
+	movq %rsp, %rbp
+	# int pares = -4(%rbp)
+	subq $4, %rsp
+	# int vetor [10] = -44(%rbp)
+	subq $40, %rsp
+	movq $2, -44(%rbp)
+	movq $4, -40(%rbp)
+	movq $7, -36(%rbp)
+	movq $4, -32(%rbp)
+	movq $9, -28(%rbp)
+	movq $12, -24(%rbp)
+	movq $32, -20(%rbp)
+	movq $50, -16(%rbp)
+	movq $90, -12(%rbp)
+	movq $23, -8(%rbp)
 
-    pushq %rbp
-    movq %rsp, %rbp     # atualiza o topo da pilha
+	# passagem de parametros por registradores:
+	#    %rdi, %rsi, %rdx, %rcx, %r8, %r9
 
-    subq $8, %rbp       # cria uma variável local (pares) de tamanho 8 bytes
-    
-    # cria o vetor local de 10 posições
-    subq $80, %rsp      # aloca espaço 10 posições
-    movq $-8, -96(%rsp)
-    movq $1, -88(%rsp)
-    movq $4, -80(%rsp)
-    movq $23, -72(%rsp)
-    movq $12, -64(%rsp)
-    movq $67, -56(%rsp)
-    movq $98, -48(%rsp)
-    movq $2, -40(%rsp)
-    movq $5, -32(%rsp)
-    movq $9, -24(%rsp)
+	# protótipo da função: _quantidade_pares(int * vetor, int tam)
+	# vamos fazer: _quantidade_pares(%rdi, %esi)
 
-    call quantidade_pares
-
-    addq $80, %rsp      # exclui todo o vetor da pilha
-
-    movq %r10, 8(%rsp) # pares = %r10
-
-    movq %r10, %rdi     # para visualização
-    addq $16, %rsp      # limpa a pilha
-    movq $60, %rax
-    syscall
-
-quantidade_pares:
-
-    pushq %rbp
-    movq %rsp, %rbp         # atualiza o topo da pilha
-
-    subq $16, %rbp          # aloca espaço para variáveis locais: i e pares
-    movq $0, -8(%rbp)       # i = 0    
-    movq $0, -16(%rbp)      # pares = 0
-
-    movq -8(%rbp), %rdi     # %rdi = i
-
-    movq 16(%rbp), %rbx    # primeira posição do vetor em %rbx
-    movq $2, %r8            # denominador
-    movq $0, %r9            # imediato 0 para comparação
-
-    _loop:
-        cmpq $10, %rdi      # compara 10 e i
-        jge _end_loop
-        
-        movq (%rbx,%rdi,8), %rax    # itera cada posição do vetor
-
-        idivq %r8          # %rax = %rax / 2, %rdx = %rax % 2
-
-        cmpq %rdx, %r9
-        jne _loop
-
-        addq $1, 16(%rbp)   # pares++
-
-    _end_loop:
-        movq 16(%rbp), %r10 # valor que será retornado
-        popq -16(%rbp)
-        popq %rbp
-        ret
+	movl $10, %esi   # 2° parametro tam        
+	movq %rbp, %rax
+	subq $44, %rax   # $vetor[0]
+	movq %rax, %rdi  # 1° parametro &vetor[0]
+	
+	call _quantidade_pares
+	
+	movl %eax, -4(%rbp)
+	movl -4(%rbp), %edi
+	addq $44, %rsp
+	popq %rbp
+	movq $60, %rax
+	syscall

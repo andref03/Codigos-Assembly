@@ -2,7 +2,7 @@
 # as --64 converte_padrao_ieee754.s -o exe.o ; ld -o exe exe.o ; ./exe
 
 .section .data
-  entrada:  .asciz "-98.625"
+  entrada:  .asciz "0.1"
   saida:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + '' + 23 (mantissa) + '\0'
   binario:  .space 64
   binario_int: .space 64
@@ -61,12 +61,32 @@ _converte_padrao_ieee754:
   call _transforma_em_binario
 
   _calcula_expoente:
-    # o expoente é o tamanho da parte inteira - 1
+    # parte inteira está em %r8
+    cmpq $0, %r8
+    je _parte_inteira_zero
+    # a parte inteira é diferente de zero, ent expoente é o tamanho da parte inteira - 1
     movq %r15, %rax
     decq %rax
     addq $127, %rax
+    jmp _exp_para_binario
     
-  call _expoente_para_binario
+    _parte_inteira_zero:
+      _loop6:
+        movb binario(%r15), %al
+        cmpb $'1', %al
+        je _fim_loop6
+        incq %r15
+        jmp _loop6
+
+    _fim_loop6:
+      incq %r15
+      movq %r15, %rax
+      imulq $-1, %rax
+      addq $127, %rax
+      movq $-1, %rbx      # rbx = -1 se torna uma flag pra saber se o expoente é negativo
+
+  _exp_para_binario:
+    call _expoente_para_binario
 
   movb $' ', saida(%rcx)  # espaço só pra separar os campos
   incq %rcx
@@ -75,9 +95,17 @@ _converte_padrao_ieee754:
     movq $0, %r14
     movq $0, %r12
 
+  _verifica_expoente:
+    cmpq $-1, %rbx
+    je _expoente_negativo
     # ignora o primeiro bit (começa no bit de index 1)
     movq $1, %rdi
     leaq binario(%rdi), %rsi # rsi agora aponta para o ponto eno binário normalizado
+    jmp _loop_mantissa
+
+    _expoente_negativo:
+      movq %r15, %rdi
+      leaq binario(%rdi), %rsi # rsi agora aponta para o ponto eno binário normalizado
 
   _loop_mantissa:
     cmpq $23, %r14
@@ -176,7 +204,7 @@ _transforma_em_binario:
   _loop3:
     cmpq $0, %rax
     je _fim_divisoes
-    xorq %rdx, %rdx
+    movq $0, %rdx
     idivq %r10
     addb $'0', %dl  # transforma em char só pra inserir na string mesmo
     movb %dl, binario_int(%r11)
@@ -198,12 +226,10 @@ _transforma_em_binario:
     movq $1, %rax
     cvtsi2ssq %rax, %xmm3
     
-    movq $0, %r14
-    movq $24, %r13        # 23 bits da mantissa + 1 por segurança
-    addq %r15, %r13       # adiciona ao 24 o expoente, pra compensar o deslocamento do ponto
+    movq $0, %r14    
 
   _loop5:
-    cmpq %r13, %r14
+    cmpq $127, %r14             # loop grande o suficiente pra cobrir qualquer tamanho de expoente
     jge _fim_multiplicacoes
     incq %r14
     mulss %xmm2, %xmm0

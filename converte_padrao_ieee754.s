@@ -1,3 +1,6 @@
+# execução:
+# as --64 converte_padrao_ieee754.s -o exe.o ; ld -o exe exe.o ; ./exe
+
 .section .data
   entrada:  .asciz "-98.625"
   saida:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + '' + 23 (mantissa) + '\0'

@@ -65,7 +65,65 @@ _string_to_float:
 
     _binario_int_limpo:
 
+        leaq expoente_temp(%rip), %rdi
     
+    _loop9:
+        cmpb $0, (%rdi)
+        je _expoente_temp_limpo
+        movb %al, (%rdi)
+        incq %rdi
+        jmp _loop9
+
+    _expoente_temp_limpo:
+
+    movq $11, %rcx      # posição de início da mantissa, em resultado
+    movq $0, %r10
+    movb $'1', binario(%r10)
+    incq %r10
+
+    _loop10:
+        movb resultado(%rcx), %al
+        cmpb $0, %al
+        je _mantissa_extraida
+        movb %al, binario(%r10)
+        incq %r10
+        incq %rcx
+        jmp _loop10
+
+    _mantissa_extraida:
+
+    movq $2, %rcx       # posição de início do expoente em resultado
+    movq $0, %r10
+
+    _loop11:
+        movb resultado(%rcx), %al
+        cmpb $' ', %al
+        je _expoente_extraido
+        movb %al, expoente_temp(%r10)
+        incq %r10
+        incq %rcx
+        jmp _loop11
+    
+    _expoente_extraido:
+    
+    movq $0, %rcx
+    decq %r10   # qtdd de bits do expoente
+    movq $1, %r13 # coeficiente de multiplicação base 2
+
+    _loop12:
+        movb expoente_temp(%r10), %al
+        subb $'0', %al 
+        movzbq %al, %rax
+        imulq %r13, %rax
+        addq %rax, %rcx
+
+        imulq $2, %r13
+        decq %r10
+        cmpq $0, %r10
+        jl _loop12
+
+    _expoente_calculado:
+
 
 
 

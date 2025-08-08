@@ -2,7 +2,7 @@
 # as --64 converte_padrao_ieee754.s -o exe.o ; ld -o exe exe.o ; ./exe
 
 .section .data
-  entrada:  .asciz "0.1"
+  entrada:  .asciz "+0.12"
   saida:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + '' + 23 (mantissa) + '\0'
   binario:  .space 64
   binario_int: .space 64
@@ -100,22 +100,30 @@ _converte_padrao_ieee754:
     je _expoente_negativo
     # ignora o primeiro bit (começa no bit de index 1)
     movq $1, %rdi
-    leaq binario(%rdi), %rsi # rsi agora aponta para o ponto eno binário normalizado
+    leaq binario(%rdi), %rsi # rsi agora aponta para o ponto no binário normalizado
     jmp _loop_mantissa
 
     _expoente_negativo:
       movq %r15, %rdi
-      leaq binario(%rdi), %rsi # rsi agora aponta para o ponto eno binário normalizado
+      leaq binario(%rdi), %rsi # rsi agora aponta para o ponto no binário normalizado
 
   _loop_mantissa:
     cmpq $23, %r14
     jge _fim_conversao
     movb (%rsi), %al
+    cmpb $0, %al           # se chegou no '\0'
+    je _completa_zero
     movb %al, saida(%rcx)
-    incq %rsi
-    incq %rcx
-    incq %r14
-    jmp _loop_mantissa
+    jmp _avanca
+
+    _completa_zero:
+        movb $'0', saida(%rcx)
+
+    _avanca:
+        incq %rsi
+        incq %rcx
+        incq %r14
+      jmp _loop_mantissa
 
 _fim_conversao:
   leave
@@ -229,7 +237,7 @@ _transforma_em_binario:
     movq $0, %r14    
 
   _loop5:
-    cmpq $127, %r14             # loop grande o suficiente pra cobrir qualquer tamanho de expoente
+    cmpq $90, %r14      # loop grande o suficiente pra cobrir um expoente grande
     jge _fim_multiplicacoes
     incq %r14
     mulss %xmm2, %xmm0

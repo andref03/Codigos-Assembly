@@ -2,7 +2,7 @@
 # as --64 converte_padrao_ieee754.s -o exe.o ; ld -o exe exe.o ; ./exe
 
 .section .data
-  entrada:  .asciz "+0.12"
+  entrada:  .asciz "12.3"
   saida:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + '' + 23 (mantissa) + '\0'
   binario:  .space 64
   binario_int: .space 64

@@ -1,8 +1,9 @@
 # execução:
 # as --64 string_to_float.s -o exe.o ; ld -o exe exe.o ; ./exe
+# as --64 string_to_float.s -o exe.o ; ld -o exe exe.o ; gdb ./exe
 
 .section .data
-  entrada:    .asciz "105.15"
+  entrada:    .asciz "-105.1512"
   resultado:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + ' ' + 23 (mantissa) + '\0'
   binario:    .space 100
   binario_int:    .space 100
@@ -20,19 +21,19 @@ _start:
     call _string_to_float
 
     movq $1, %rax
-  movq $1, %rdi
-  leaq binario_int(%rip), %rsi
-  movq $35, %rdx
-  syscall
+    movq $1, %rdi
+    leaq resultado(%rip), %rsi
+    movq $35, %rdx
+    syscall
 
-  movq $1, %rax
-  movq $1, %rdi
-  leaq quebra_linha(%rip), %rsi
-  movq $1, %rdx
-  syscall
+    movq $1, %rax
+    movq $1, %rdi
+    leaq quebra_linha(%rip), %rsi
+    movq $1, %rdx
+    syscall
 
     popq %rbp
-    movq %r9, %rdi
+    movq $0, %rdi
     movq $60, %rax
     syscall
 
@@ -154,7 +155,7 @@ _string_to_float:
     _parte_inteira_extraida:
     
     movq $0, %r9
-    movq %rbx, %r10 # tamanho parte inteira (ou rcx?)
+    movq %rbx, %r10 # tamanho parte inteira
     movq $1, %r13   # fator potência de 2
 
     _loop14:
@@ -170,9 +171,53 @@ _string_to_float:
         jmp _loop14
 
     _inteiro_calculado:
-    a:
-    leave
-    ret
+    # de %rcx em diante, a string binario tem a mantissa
+
+    movq $0, %rax
+    cvtsi2ss %rax, %xmm3  # acumulador
+    movq $2, %rax
+    cvtsi2ss %rax, %xmm2  # potências de 2
+    movq $0, %r11
+
+
+    _loop15:
+        cmpq $23, %r11
+        jge _mantissa_calculada
+        movb binario(%rcx), %al
+        cmpb $0, %al
+        je _mantissa_calculada
+        subb $'0', %al
+        movzbq %al, %rax
+        cvtsi2ss %rax, %xmm0
+        divss %xmm2, %xmm0      # bit * (1/2^n)
+        addss %xmm0, %xmm3
+        movq $2, %rax # só pra atualizar
+        cvtsi2ss %rax, %xmm4
+        mulss %xmm4, %xmm2
+        incq %rcx
+        incq %r11
+        jmp _loop15
+
+    _mantissa_calculada:
+    # xmm3 possui a mantissa calculada, %r9 a parte inteira
+
+    
+    cvtsi2ss %r9, %xmm0
+    addss %xmm3, %xmm0
+
+    leaq resultado(%rip), %rdi
+    cmpb $'1', (%rdi)
+    je _negativo
+    jmp _fim
+
+    _negativo:
+        movq $-1, %rax
+        cvtsi2ss %rax, %xmm1
+        mulss %xmm1, %xmm0
+
+    _fim:
+        leave
+        ret
 
 # ------------------------------------------------------------------------
 

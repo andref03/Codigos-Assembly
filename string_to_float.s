@@ -4,7 +4,9 @@
 
 .section .data
   entrada:    .asciz "-2.1"
-  resultado:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + ' ' + 23 (mantissa) + '\0'
+  tipo:       .quad 0 # 0 = float, 1 = double
+  resultado32:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + ' ' + 23 (mantissa) + '\0'
+  resultado64:    .space 67            # 1 (sinal) + ' ' + 11 (expoente) + ' ' + 52 (mantissa) + '\0'
   binario:    .space 100
   binario_int:    .space 100
   expoente_temp:    .space 9
@@ -22,7 +24,7 @@ _start:
 
     movq $1, %rax
     movq $1, %rdi
-    leaq resultado(%rip), %rsi
+    leaq resultado32(%rip), %rsi
     movq $35, %rdx
     syscall
 
@@ -45,7 +47,7 @@ _string_to_float:
 
     call _converte_padrao_ieee754
 
-    # neste ponto do código temos a resposta na string resultado
+    # neste ponto do código temos a resposta na string resultado32
 
     leaq binario(%rip), %rdi
     movb $0, %al
@@ -81,13 +83,13 @@ _string_to_float:
 
     _expoente_temp_limpo:
 
-    movq $11, %rcx      # posição de início da mantissa, em resultado
+    movq $11, %rcx      # posição de início da mantissa, em resultado32
     movq $0, %r10
     movb $'1', binario(%r10)
     incq %r10
 
     _loop10:
-        movb resultado(%rcx), %al
+        movb resultado32(%rcx), %al
         cmpq $24, %r10
         je _mantissa_extraida
         cmpb $' ', %al
@@ -104,11 +106,11 @@ _string_to_float:
 
     _mantissa_extraida:
 
-    movq $2, %rcx       # posição de início do expoente em resultado
+    movq $2, %rcx       # posição de início do expoente em resultado32
     movq $0, %r10
 
     _loop11:
-        movb resultado(%rcx), %al
+        movb resultado32(%rcx), %al
         cmpb $' ', %al
         je _expoente_extraido
         movb %al, expoente_temp(%r10)
@@ -239,7 +241,7 @@ _string_to_float:
         jmp _loop_divisao
 
     _aplicar_sinal:
-    leaq resultado(%rip), %rdi
+    leaq resultado32(%rip), %rdi
     cmpb $'1', (%rdi)
     je _negativo
     jmp _fim
@@ -264,7 +266,7 @@ _converte_padrao_ieee754:
     movb (%rdi), %al
     cmpb $'-', %al
     jne _positivo
-    movb $'1', resultado(%rcx)
+    movb $'1', resultado32(%rcx)
     incq %rdi
     jmp _sinal_analisado
   _positivo:
@@ -273,11 +275,11 @@ _converte_padrao_ieee754:
     incq %rdi
 
   _sem_sinal:
-    movb $'0', resultado(%rcx)
+    movb $'0', resultado32(%rcx)
   _sinal_analisado:
     incq %rcx
 
-  movb $' ', resultado(%rcx)  # espaço só pra separar os campos
+  movb $' ', resultado32(%rcx)  # espaço só pra separar os campos
   incq %rcx
 
   call _transforma_em_binario
@@ -310,7 +312,7 @@ _converte_padrao_ieee754:
   _exp_para_binario:
     call _expoente_para_binario
 
-  movb $' ', resultado(%rcx)  # espaço só pra separar os campos
+  movb $' ', resultado32(%rcx)  # espaço só pra separar os campos
   incq %rcx
 
   _calcula_mantissa:
@@ -335,11 +337,11 @@ _converte_padrao_ieee754:
     movb (%rsi), %al
     cmpb $0, %al           # se chegou no '\0'
     je _completa_zero
-    movb %al, resultado(%rcx)
+    movb %al, resultado32(%rcx)
     jmp _avanca
 
     _completa_zero:
-        movb $'0', resultado(%rcx)
+        movb $'0', resultado32(%rcx)
 
     _avanca:
         incq %rsi
@@ -384,7 +386,7 @@ _expoente_para_binario:
       jl _fim_inverte_expoente
       decq %r9
       movb expoente_temp(%r9), %al
-      movb %al, resultado(%rcx)
+      movb %al, resultado32(%rcx)
       incq %rcx
       jmp _loop_exp_inv
 

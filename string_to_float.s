@@ -2,7 +2,7 @@
 # as --64 string_to_float.s -o exe.o ; ld -o exe exe.o ; ./exe
 
 .section .data
-  entrada:    .asciz "-105.15"
+  entrada:    .asciz "105.15"
   resultado:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + ' ' + 23 (mantissa) + '\0'
   binario:    .space 100
   binario_int:    .space 100
@@ -19,10 +19,20 @@ _start:
 
     call _string_to_float
 
-    
+    movq $1, %rax
+  movq $1, %rdi
+  leaq binario_int(%rip), %rsi
+  movq $35, %rdx
+  syscall
+
+  movq $1, %rax
+  movq $1, %rdi
+  leaq quebra_linha(%rip), %rsi
+  movq $1, %rdx
+  syscall
 
     popq %rbp
-    movq %rcx, %rdi
+    movq %r9, %rdi
     movq $60, %rax
     syscall
 
@@ -109,23 +119,57 @@ _string_to_float:
     
         movq $0, %rcx
         movq $7, %r10
-        movq $1, %r13
+        movq $1, %r13   # fator potência de 2
 
-        _loop12:
-            cmpq $0, %r10
-            jl _expoente_calculado
-            movb expoente_temp(%r10), %al
-            subb $'0', %al
-            movzbq %al, %rax
-            imulq %r13, %rax
-            addq %rax, %rcx
-            imulq $2, %r13
-            decq %r10
-            jmp _loop12
+    _loop12:
+        cmpq $0, %r10
+        jl _expoente_calculado
+        movb expoente_temp(%r10), %al
+        subb $'0', %al
+        movzbq %al, %rax
+        imulq %r13, %rax
+        addq %rax, %rcx
+        imulq $2, %r13
+        decq %r10
+        jmp _loop12
 
     _expoente_calculado:
-        # movq %rcx, %rax
         subq $127, %rcx
+        movq %rcx, %rbx     # rbx = expoente
+
+    movq $0, %r10
+    movb $'1', binario_int(%r10)
+    incq %r10
+    movq $1, %rcx
+
+    _loop13:
+        movb binario(%rcx), %al
+        cmpq %rbx, %rcx
+        jg _parte_inteira_extraida
+        movb %al, binario_int(%r10)
+        incq %r10
+        incq %rcx
+        jmp _loop13
+
+    _parte_inteira_extraida:
+    
+    movq $0, %r9
+    movq %rbx, %r10 # tamanho parte inteira (ou rcx?)
+    movq $1, %r13   # fator potência de 2
+
+    _loop14:
+        cmpq $0, %r10
+        jl _inteiro_calculado
+        movb binario_int(%r10), %al
+        subb $'0', %al
+        movzbq %al, %rax
+        imulq %r13, %rax
+        addq %rax, %r9
+        imulq $2, %r13
+        decq %r10
+        jmp _loop14
+
+    _inteiro_calculado:
     a:
     leave
     ret

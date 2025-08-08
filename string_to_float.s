@@ -3,7 +3,7 @@
 # as --64 string_to_float.s -o exe.o ; ld -o exe exe.o ; gdb ./exe
 
 .section .data
-  entrada:    .asciz "-105.1512"
+  entrada:    .asciz "-2.1"
   resultado:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + ' ' + 23 (mantissa) + '\0'
   binario:    .space 100
   binario_int:    .space 100
@@ -138,6 +138,9 @@ _string_to_float:
         subq $127, %rcx
         movq %rcx, %rbx     # rbx = expoente
 
+    cmpq $0, %rbx
+    jl _expoente_negativo_tratamento
+    
     movq $0, %r10
     movb $'1', binario_int(%r10)
     incq %r10
@@ -171,14 +174,24 @@ _string_to_float:
         jmp _loop14
 
     _inteiro_calculado:
-    # de %rcx em diante, a string binario tem a mantissa
+    jmp _calcula_mantissa_fracionaria
+
+    _expoente_negativo_tratamento:
+        movq $0, %r9
+        movq $1, %rcx
+        movq %rbx, %rax
+        imulq $-1, %rax  # torna positivo
+        decq %rax
+        addq %rax, %rcx  # pula os bits necessários
+
+    _calcula_mantissa_fracionaria:
+    # de %rcx em diante, a string binario tem a mantissa fracionária
 
     movq $0, %rax
-    cvtsi2ss %rax, %xmm3  # acumulador
+    cvtsi2ss %rax, %xmm3  # acumulador da mantissa
     movq $2, %rax
-    cvtsi2ss %rax, %xmm2  # potências de 2
-    movq $0, %r11
-
+    cvtsi2ss %rax, %xmm2  # potências de 2 (começa com 2)
+    movq $0, %r11         # contador de bits processados
 
     _loop15:
         cmpq $23, %r11
@@ -191,9 +204,9 @@ _string_to_float:
         cvtsi2ss %rax, %xmm0
         divss %xmm2, %xmm0      # bit * (1/2^n)
         addss %xmm0, %xmm3
-        movq $2, %rax # só pra atualizar
+        movq $2, %rax
         cvtsi2ss %rax, %xmm4
-        mulss %xmm4, %xmm2
+        mulss %xmm4, %xmm2      # próxima potência de 2
         incq %rcx
         incq %r11
         jmp _loop15
@@ -201,10 +214,31 @@ _string_to_float:
     _mantissa_calculada:
     # xmm3 possui a mantissa calculada, %r9 a parte inteira
 
+    # pra expoente negativo, aplicar divisão por 2^expoentr
+    cmpq $0, %rbx
+    jl _aplicar_divisao_expoente
     
     cvtsi2ss %r9, %xmm0
     addss %xmm3, %xmm0
+    jmp _aplicar_sinal
 
+    _aplicar_divisao_expoente:
+    movq $1, %rax
+    cvtsi2ss %rax, %xmm0
+    addss %xmm3, %xmm0 
+    movq %rbx, %rax
+    imulq $-1, %rax
+    movq $2, %r10
+    cvtsi2ss %r10, %xmm4    # 2
+    
+    _loop_divisao:
+        cmpq $0, %rax
+        jle _aplicar_sinal
+        divss %xmm4, %xmm0    # dividir por 2
+        decq %rax
+        jmp _loop_divisao
+
+    _aplicar_sinal:
     leaq resultado(%rip), %rdi
     cmpb $'1', (%rdi)
     je _negativo

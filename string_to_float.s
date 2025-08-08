@@ -1,11 +1,11 @@
 # execução:
-# as --64 converte_padrao_ieee754.s -o exe.o ; ld -o exe exe.o ; ./exe
+# as --64 string_to_float.s -o exe.o ; ld -o exe exe.o ; ./exe
 
 .section .data
-  entrada:    .asciz "12.3"
+  entrada:    .asciz "-105.15"
   resultado:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + ' ' + 23 (mantissa) + '\0'
-  binario:    .space 64
-  binario_int:    .space 64
+  binario:    .space 100
+  binario_int:    .space 100
   expoente_temp:    .space 9
   quebra_linha:    .asciz "\n"
 
@@ -13,24 +13,18 @@
 .globl _start
 
 _start:
-  leaq entrada(%rip), %rdi
-  
-  call _string_to_float
+    pushq %rbp
+    movq %rsp, %rbp
+    leaq entrada(%rip), %rdi
 
-  movq $1, %rax
-  movq $1, %rdi
-  leaq resultado(%rip), %rsi
-  movq $35, %rdx
-  syscall
+    call _string_to_float
 
-  movq $1, %rax
-  movq $1, %rdi
-  leaq quebra_linha(%rip), %rsi
-  movq $1, %rdx
-  syscall
+    
 
-  movq $60, %rax
-  syscall
+    popq %rbp
+    movq %rcx, %rdi
+    movq $60, %rax
+    syscall
 
   # ------------------------------------------------------------------------
 
@@ -83,8 +77,15 @@ _string_to_float:
 
     _loop10:
         movb resultado(%rcx), %al
-        cmpb $0, %al
+        cmpq $24, %r10
         je _mantissa_extraida
+        cmpb $' ', %al
+        je _remove_espaco
+        jmp _sem_espaco
+        _remove_espaco:
+            incq %rcx
+            jmp _loop10
+        _sem_espaco:
         movb %al, binario(%r10)
         incq %r10
         incq %rcx
@@ -106,27 +107,26 @@ _string_to_float:
     
     _expoente_extraido:
     
-    movq $0, %rcx
-    decq %r10   # qtdd de bits do expoente
-    movq $1, %r13 # coeficiente de multiplicação base 2
+        movq $0, %rcx
+        movq $7, %r10
+        movq $1, %r13
 
-    _loop12:
-        movb expoente_temp(%r10), %al
-        subb $'0', %al 
-        movzbq %al, %rax
-        imulq %r13, %rax
-        addq %rax, %rcx
-
-        imulq $2, %r13
-        decq %r10
-        cmpq $0, %r10
-        jl _loop12
+        _loop12:
+            cmpq $0, %r10
+            jl _expoente_calculado
+            movb expoente_temp(%r10), %al
+            subb $'0', %al
+            movzbq %al, %rax
+            imulq %r13, %rax
+            addq %rax, %rcx
+            imulq $2, %r13
+            decq %r10
+            jmp _loop12
 
     _expoente_calculado:
-
-
-
-
+        # movq %rcx, %rax
+        subq $127, %rcx
+    a:
     leave
     ret
 

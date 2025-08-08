@@ -3,7 +3,7 @@
 
 .section .data
   entrada:    .asciz "12.3"
-  resultado:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + '' + 23 (mantissa) + '\0'
+  resultado:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + ' ' + 23 (mantissa) + '\0'
   binario:    .space 64
   binario_int:    .space 64
   expoente_temp:    .space 9
@@ -42,7 +42,32 @@ _string_to_float:
 
     # neste ponto do código temos a resposta na string resultado
 
+    leaq binario(%rip), %rdi
+    movb $0, %al
+
+    _loop7:
+        cmpb $0, (%rdi)
+        je _binario_limpo
+        movb %al, (%rdi)
+        incq %rdi
+        jmp _loop7
+
+    _binario_limpo:
+
+        leaq binario_int(%rip), %rdi
+
+    _loop8:
+        cmpb $0, (%rdi)
+        je _binario_int_limpo
+        movb %al, (%rdi)
+        incq %rdi
+        jmp _loop8
+
+    _binario_int_limpo:
+
     
+
+
 
     leave
     ret

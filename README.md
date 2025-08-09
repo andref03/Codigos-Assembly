@@ -71,3 +71,7 @@ tipo:    .long 0        # 0 = float, 1 = double
 ```gdb
 (gdb) q
 ```
+
+## Teste para validar a Conversão
+
+https://numeral-systems.com/ieee-754-converter/

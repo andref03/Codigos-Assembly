@@ -3,8 +3,8 @@
 # as --64 string_to_float.s -o exe.o ; ld -o exe exe.o ; gdb ./exe
 
 .section .data
-  entrada:    .asciz "105.15"
-  tipo:       .quad 0 # 0 = float, 1 = double
+  entrada:    .asciz "-105.15"
+  tipo:       .quad 1 # 0 = float, 1 = double
   resultado32:    .space 35            # 1 (sinal) + ' ' + 8 (expoente) + ' ' + 23 (mantissa) + '\0'
   resultado64:    .space 67            # 1 (sinal) + ' ' + 11 (expoente) + ' ' + 52 (mantissa) + '\0'
   binario:    .space 100
@@ -21,6 +21,9 @@ _start:
     movq %rsp, %rbp
     leaq entrada(%rip), %rdi
 
+    cmpq $0, tipo(%rip)
+    je _calcula_float
+    
     call _string_to_double
 
     movq $1, %rax
@@ -28,6 +31,20 @@ _start:
     leaq resultado64(%rip), %rsi
     movq $67, %rdx
     syscall
+
+    jmp _fim
+
+    _calcula_float:
+
+    call _string_to_double
+
+    movq $1, %rax
+    movq $1, %rdi
+    leaq resultado32(%rip), %rsi
+    movq $67, %rdx
+    syscall
+
+    _fim:
 
     movq $1, %rax
     movq $1, %rdi
@@ -245,14 +262,14 @@ _float:
         leaq resultado32(%rip), %rdi
         cmpb $'1', (%rdi)
         je _negativo
-        jmp _fim
+        jmp _fim_f
 
         _negativo:
             movq $-1, %rax
             cvtsi2ss %rax, %xmm1
             mulss %xmm1, %xmm0
 
-        _fim:
+        _fim_f:
             leave
             ret
 
@@ -654,25 +671,25 @@ _double:
         # de %rcx em diante, a string binario tem a mantissa fracionária
 
         movq $0, %rax
-        cvtsi2ss %rax, %xmm3  # acumulador da mantissa
+        cvtsi2sd %rax, %xmm3  # acumulador da mantissa
         movq $2, %rax
-        cvtsi2ss %rax, %xmm2  # potências de 2 (começa com 2)
+        cvtsi2sd %rax, %xmm2  # potências de 2 (começa com 2)
         movq $0, %r11         # contador de bits processados
 
         _loop15_d:
-            cmpq $23, %r11
+            cmpq $500, %r11
             jge _mantissa_calculada_d
             movb binario(%rcx), %al
             cmpb $0, %al
             je _mantissa_calculada_d
             subb $'0', %al
             movzbq %al, %rax
-            cvtsi2ss %rax, %xmm0
-            divss %xmm2, %xmm0      # bit * (1/2^n)
-            addss %xmm0, %xmm3
+            cvtsi2sd %rax, %xmm0
+            divsd %xmm2, %xmm0      # bit * (1/2^n)
+            addsd %xmm0, %xmm3
             movq $2, %rax
-            cvtsi2ss %rax, %xmm4
-            mulss %xmm4, %xmm2      # próxima potência de 2
+            cvtsi2sd %rax, %xmm4
+            mulsd %xmm4, %xmm2      # próxima potência de 2
             incq %rcx
             incq %r11
             jmp _loop15_d
@@ -684,23 +701,23 @@ _double:
         cmpq $0, %rbx
         jl _aplicar_divisao_expoente_d
         
-        cvtsi2ss %r9, %xmm0
-        addss %xmm3, %xmm0
+        cvtsi2sd %r9, %xmm0
+        addsd %xmm3, %xmm0
         jmp _aplicar_sinal_d
 
         _aplicar_divisao_expoente_d:
         movq $1, %rax
-        cvtsi2ss %rax, %xmm0
-        addss %xmm3, %xmm0 
+        cvtsi2sd %rax, %xmm0
+        addsd %xmm3, %xmm0 
         movq %rbx, %rax
         imulq $-1, %rax
         movq $2, %r10
-        cvtsi2ss %r10, %xmm4    # 2
+        cvtsi2sd %r10, %xmm4    # 2
         
         _loop_divisao_d:
             cmpq $0, %rax
             jle _aplicar_sinal_d
-            divss %xmm4, %xmm0    # dividir por 2
+            divsd %xmm4, %xmm0    # dividir por 2
             decq %rax
             jmp _loop_divisao_d
 
@@ -712,8 +729,8 @@ _double:
 
         _negativo_d:
             movq $-1, %rax
-            cvtsi2ss %rax, %xmm1
-            mulss %xmm1, %xmm0
+            cvtsi2sd %rax, %xmm1
+            mulsd %xmm1, %xmm0
 
         _fim_d:
             leave

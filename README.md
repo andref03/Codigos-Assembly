@@ -11,6 +11,12 @@ as --64 string_to_float.s -o exe.o ; ld -o exe exe.o ; gdb ./exe
 
 > Após rodar este comando, o GDB será iniciado. Pressione **Enter** quando necessário.
 
+### Visualizar montagem dos bits no Padrão IEEE 754
+
+```bash
+as --64 string_to_float.s -o exe.o ; ld -o exe exe.o ; ./exe
+```
+
 ---
 
 ## 🐞 Dentro do GDB:

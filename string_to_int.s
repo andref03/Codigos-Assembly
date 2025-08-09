@@ -8,64 +8,62 @@ _start:
     pushq %rbp
     movq %rsp, %rbp
    
-    leaq entrada(%rip), %rdi
+    leaq entrada(%rip), %rdi    # ponteiro da string vai para %rdi
 
     # parâmetro %rdi: ponteiro da entrada
     call _string_to_int
 
     popq %rbp
-    # resultado em %eax
+    # resultado está em %eax
     movl %eax, %edi
-    movq $60, %rax
+    movl $60, %eax
     syscall
 
-_string_to_int:
+# ---------------------------------------------------------------------
 
+_string_to_int:
     pushq %rbp
     movq %rsp, %rbp
     
-    subq $4, %rsp  # resultado = -4(%rbp)
-    subq $4, %rsp  # sinal = -8(%rbp)
-    subq $4, %rsp  # digito = -12(%rbp)
+    subq $4, %rsp   # resultado = -4(%rbp)
+    subq $4, %rsp   # sinal = -8(%rbp)
+    subq $4, %rsp   # digito = -12(%rbp)
 
-    movl $0, -4(%rbp)
-    movl $1, -8(%rbp)
+    movl $0, -4(%rbp)   # resultado = 0
+    movl $1, -8(%rbp)   # sinal = 1
 
-    _if:
-        movzbq (%rdi), %rax
-        cmpb $'-', %al
-        jne _else
-        movl $-1, -8(%rbp)
-        incq %rdi
-        jmp _loop_func
-    _else:
+    movzbl (%rdi), %eax   # %al: caractere atual
+    cmpb $'-', %al
+    jne _else_str_to_int
+    movl $-1, -8(%rbp)    # sinal = -1
+    addq $1, %rdi
+    jmp _loop_str_to_int
+
+    _else_str_to_int:
         cmpb $'+', %al
-        jne _loop_func
-        incq %rdi
+        jne _loop_str_to_int
+        addq $1, %rdi
 
-    _loop_func:
-        movzbq (%rdi), %rax
+    _loop_str_to_int:
+        movzbl (%rdi), %eax
         cmpb $0, %al
-        je _fim_func
+        je _fim_str_to_int
 
         call _char_para_digito
 
-        # se não for um dígito
         cmpl $-1, %eax
-        je _fim_func
+        je _fim_str_to_int
 
-        # acumula valor do inteiro
-        movl %eax, -12(%rbp)
-        movl -4(%rbp), %eax
+        movl %eax, -12(%rbp)  # digito
+        movl -4(%rbp), %eax   # resultado
         imull $10, %eax, %eax
         addl -12(%rbp), %eax
         movl %eax, -4(%rbp)
 
-        incq %rdi
-        jmp _loop_func
+        addq $1, %rdi
+        jmp _loop_str_to_int
 
-    # aplica sinal
-    _fim_func:
+    _fim_str_to_int:
         movl -8(%rbp), %edx
         movl -4(%rbp), %eax
         imull %edx, %eax
@@ -73,25 +71,25 @@ _string_to_int:
         popq %rbp
         ret
 
-_char_para_digito:
+# ---------------------------------------------------------------------
 
+_char_para_digito:
     pushq %rbp
     movq %rsp, %rbp
-    movzbq (%rdi), %rax
+    movzbl (%rdi), %eax
 
-    _if_aux:
-        cmpb $'0', %al
-        jl _char_invalido
-        cmpb $'9', %al
-        jg _char_invalido
+    cmpb $'0', %al
+    jl _char_invalido
+    cmpb $'9', %al
+    jg _char_invalido
 
-        subb $'0', %al
-        movzbl %al, %eax
-        jmp _fim_func_aux
+    subb $'0', %al
+    movzbl %al, %eax
+    jmp _fim_char__para_digito
 
     _char_invalido:
         movl $-1, %eax
 
-    _fim_func_aux:
+    _fim_char__para_digito:
         popq %rbp
         ret

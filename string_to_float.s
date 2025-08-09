@@ -36,7 +36,7 @@ _start:
 
     _calcula_float:
 
-    call _string_to_double
+    call _string_to_float
 
     movq $1, %rax
     movq $1, %rdi

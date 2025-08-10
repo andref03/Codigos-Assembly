@@ -1,5 +1,5 @@
 .section .data
-float_val: .float -21.174
+double_val: .double -21.174
 resultado: .space 100
 quebra_linha: .asciz "\n"
 
@@ -10,10 +10,10 @@ _start:
     pushq %rbp
     movq %rsp, %rbp
 
-    movss float_val(%rip), %xmm0
+    movsd double_val(%rip), %xmm0
     leaq resultado(%rip), %rsi
 
-    call _float_to_string
+    call _double_to_string
 
     # imprime resultado
     leaq resultado(%rip), %rdi
@@ -39,32 +39,32 @@ _start:
 
 # -------------------------------------------------------------------
 
-_float_to_string:
+_double_to_string:
     pushq %rbp
     movq %rsp, %rbp
     movq %rsi, %r8 # string
 
-    movl $0, %eax
-    cvtsi2ss %eax, %xmm1
+    movq $0, %rax
+    cvtsi2sd %rax, %xmm1
 
     # sinal
-    ucomiss %xmm1, %xmm0
-    jae _sinal_tratado_float_to_str
+    ucomisd %xmm1, %xmm0
+    jae _sinal_tratado_double_to_str
 
     movb $'-', (%r8)
     incq %r8
-    movl $-1, %eax
-    cvtsi2ss %eax, %xmm1
-    mulss %xmm1, %xmm0  # xmm0 agr tem valor absoluto
+    movq $-1, %rax
+    cvtsi2sd %rax, %xmm1
+    mulsd %xmm1, %xmm0  # xmm0 agr tem valor absoluto
 
-    _sinal_tratado_float_to_str:
+    _sinal_tratado_double_to_str:
 
-        cvttss2si %xmm0, %eax   # xmm0 arredondo para inteiro
-        movl %eax, %r10d
-        movl %eax, %edi
+        cvttsd2si %xmm0, %rax   # xmm0 arredondo para inteiro (64 bits)
+        movq %rax, %r10
+        movq %rax, %rdi
         movq %r8, %rsi
 
-        call _int_to_string
+        call _long_int_to_string
 
         movq %rsi, %r9
         movq %rsi, %rdi
@@ -76,103 +76,103 @@ _float_to_string:
         incq %r9
 
         # parte_fracionaria
-        cvtsi2ss %r10d, %xmm1
-        subss %xmm1, %xmm0
-        movl $0, %eax
-        cvtsi2ss %eax, %xmm2
-        ucomiss %xmm2, %xmm0
-        jne _nao_nulo_float_to_str
+        cvtsi2sd %r10, %xmm1
+        subsd %xmm1, %xmm0
+        movq $0, %rax
+        cvtsi2sd %rax, %xmm2
+        ucomisd %xmm2, %xmm0
+        jne _nao_nulo_double_to_str
         movb $'0', (%r9)  # parte fracionária é zero
         incq %r9
-        jmp _fim_float_to_str
+        jmp _fim_double_to_str
 
-    _nao_nulo_float_to_str:
-        movl $10, %ebx
-        movl $20, %ecx  # qtdd de casas decimais
+    _nao_nulo_double_to_str:
+        movq $10, %rbx
+        movq $20, %rcx
 
-    _loop_float_to_str:
-        cmpl $0, %ecx
-        je _fim_float_to_str
+    _loop_double_to_str:
+        cmpq $0, %rcx
+        je _fim_double_to_str
 
-        cvtsi2ss %ebx, %xmm2
-        mulss %xmm2, %xmm0
+        cvtsi2sd %rbx, %xmm2
+        mulsd %xmm2, %xmm0
 
-        cvttss2si %xmm0, %eax
-        movl %eax, %r11d
+        cvttsd2si %xmm0, %rax
+        movq %rax, %r11
         
         addb $'0', %al
         movb %al, (%r9)
         incq %r9
 
-        cvtsi2ss %r11d, %xmm2
-        subss %xmm2, %xmm0
+        cvtsi2sd %r11, %xmm2
+        subsd %xmm2, %xmm0
 
-        decl %ecx
-        jmp _loop_float_to_str
+        decq %rcx
+        jmp _loop_double_to_str
 
-    _fim_float_to_str:
+    _fim_double_to_str:
         movb $0, (%r9)
         popq %rbp
         ret
 
 # -------------------------------------------------------------------
 
-_int_to_string:
+_long_int_to_string:
     pushq %rbp
     movq %rsp, %rbp
     pushq %rcx
     pushq %rbx
 
-    movl %edi, %eax # valor
+    movq %rdi, %rax # valor
     movq %rsi, %r8  # string
     movq $0, %rcx
-    movl $10, %ebx
+    movq $10, %rbx
 
     # número negativo
-    cmpl $0, %eax
-    jge _positivo_int_to_str
+    cmp $0, %rax
+    jge _positivo_long_int_to_str
     movb $'-', (%r8)
     incq %r8
-    neg %eax
+    neg %rax
     
-    _positivo_int_to_str:
+    _positivo_long_int_to_str:
         # número zero
-        cmp $0, %eax
-        jne _loop_int_to_str
+        cmp $0, %rax
+        jne _loop_long_int_to_str
         movb $'0', (%r8)
         incq %r8
         movb $0, (%r8)
-        jmp _fim_int_to_str
+        jmp _fim_long_int_to_str
 
-    _loop_int_to_str:
-        movl $0, %edx
-        idivl %ebx          # divide eax por 10, edx = resto
+    _loop_long_int_to_str:
+        movq $0, %rdx
+        idivq %rbx          # divide rax por 10, rdx = resto
         addb $'0', %dl
         movb %dl, (%r8,%rcx,1)
         incq %rcx
-        cmp $0, %eax
-        jne _loop_int_to_str
+        cmp $0, %rax
+        jne _loop_long_int_to_str
 
         # inverte string
         movq %rcx, %r9
         decq %r9
         movq $0, %rax
 
-    _inverte_str:
-        cmpq %rax, %r9
-        jle _fim_str
-        movb (%r8,%rax,1), %dl
-        movb (%r8,%r9,1), %cl
-        movb %cl, (%r8,%rax,1)
-        movb %dl, (%r8,%r9,1)
-        incq %rax
-        decq %r9
-        jmp _inverte_str
+        _inverte_str:
+            cmpq %rax, %r9
+            jle _fim_str
+            movb (%r8,%rax,1), %dl
+            movb (%r8,%r9,1), %cl
+            movb %cl, (%r8,%rax,1)
+            movb %dl, (%r8,%r9,1)
+            incq %rax
+            decq %r9
+            jmp _inverte_str
 
     _fim_str:
         movb $0, (%r8,%rcx,1)
 
-    _fim_int_to_str:
+    _fim_long_int_to_str:
         popq %rbx
         popq %rcx
         leave

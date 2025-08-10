@@ -1,5 +1,5 @@
 .section .data
-entrada:    .long 2147483648
+entrada:    .long 214
 resultado:  .space 100
 quebra_linha:  .asciz "\n"
 

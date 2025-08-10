@@ -85,11 +85,11 @@ _char_para_digito:
 
     subb $'0', %al
     movzbl %al, %eax
-    jmp _fim_char__para_digito
+    jmp _fim_char_para_digito
 
     _char_invalido:
         movl $-1, %eax
 
-    _fim_char__para_digito:
+    _fim_char_para_digito:
         popq %rbp
         ret

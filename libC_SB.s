@@ -41,6 +41,8 @@ _start:
     je _float
     cmpl $4, %eax
     je _double
+    cmpl $5, %eax
+    je _long_int
     jne _fim
 
     _int:
@@ -107,6 +109,22 @@ _start:
         call _printf
         jmp _fim
 
+    _long_int:
+        movq $1, %rax
+        movq $1, %rdi
+        leaq prompt_entrada, %rsi
+        movq $20, %rdx
+        syscall
+
+        leaq entrada_scanf, %rsi
+        leaq formato_long_int, %rdi
+        call _scanf
+
+        leaq formato_long_int, %rdi
+        leaq entrada_scanf, %rsi
+        call _printf
+        jmp _fim
+
     _fim:
         # quebra de linha
         movq $1, %rax
@@ -157,6 +175,8 @@ _scanf:
     incq %r12
     cmpb $'f', %al
     je _scanf_double
+    cmpb $'d', %al
+    je _scanf_long_int
 
     _scanf_int:
         leaq entrada_scanf, %rdi
@@ -180,6 +200,12 @@ _scanf:
         leaq entrada_scanf, %rdi
         call _string_to_double # resultado em xmm0
         movsd %xmm0, (%r13)
+        jmp _fim_scanf
+
+    _scanf_long_int:
+        leaq entrada_scanf, %rdi
+        call _string_to_long_int # resultado em rax
+        movq %rax, (%r13)
         jmp _fim_scanf
 
     _fim_scanf:
@@ -220,6 +246,8 @@ _printf:
     incq %r12
     cmpb $'f', %al
     je _printf_double
+    cmpb $'d', %al
+    je _printf_long_int
 
     _printf_int:
         movl %r13d, %edi    # inteiro de entrada
@@ -244,6 +272,12 @@ _printf:
         leaq resultado_printf, %rsi
         call _double_to_string
         jmp _fim_printf
+    
+    _printf_long_int:
+        movq (%r13), %rdi # long int de entrada
+        leaq resultado_printf, %rsi
+        call _long_int_to_string
+        jmp _fim_printf
 
     _escrever_resultado_printf:
         pushq %rbp
@@ -263,6 +297,7 @@ _printf:
         movq $1, %rax
         movq $1, %rdi
         call _escrever_resultado_printf
+        
         popq %r13
         popq %r12
         popq %rbx

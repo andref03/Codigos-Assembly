@@ -29,7 +29,7 @@ _start:
     # converte entrada pra inteiro
     movq $formato_int, %rdi
     leaq entrada_scanf, %rsi
-    xor %rax, %rax
+    movq $0, %rax
     call _scanf
 
     movl entrada_scanf, %eax
@@ -43,6 +43,8 @@ _start:
     je _double
     cmpl $5, %eax
     je _long_int
+    cmpl $6, %eax
+    je _short_int
     jne _fim
 
     _int:
@@ -125,6 +127,22 @@ _start:
         call _printf
         jmp _fim
 
+    _short_int:
+        movq $1, %rax
+        movq $1, %rdi
+        leaq prompt_entrada, %rsi
+        movq $20, %rdx
+        syscall
+
+        leaq entrada_scanf, %rsi
+        leaq formato_short_int, %rdi
+        call _scanf
+
+        leaq formato_short_int, %rdi
+        leaq entrada_scanf, %rsi
+        call _printf
+        jmp _fim
+
     _fim:
         # quebra de linha
         movq $1, %rax
@@ -169,14 +187,24 @@ _scanf:
     cmpb $'f', %al
     je _scanf_float
     cmpb $'l', %al
+    je _formato_long_scanf
+    cmpb $'h', %al
     jne _fim_scanf
 
     movb (%r12), %al
     incq %r12
-    cmpb $'f', %al
-    je _scanf_double
     cmpb $'d', %al
-    je _scanf_long_int
+    je _scanf_short_int
+    jne _fim_scanf
+
+    _formato_long_scanf:
+        movb (%r12), %al
+        incq %r12
+        cmpb $'f', %al
+        je _scanf_double
+        cmpb $'d', %al
+        je _scanf_long_int
+        jne _fim_scanf
 
     _scanf_int:
         leaq entrada_scanf, %rdi
@@ -206,6 +234,12 @@ _scanf:
         leaq entrada_scanf, %rdi
         call _string_to_long_int # resultado em rax
         movq %rax, (%r13)
+        jmp _fim_scanf
+
+    _scanf_short_int:
+        leaq entrada_scanf, %rdi
+        call _string_to_short # resultado em ax
+        movw %ax, (%r13)
         jmp _fim_scanf
 
     _fim_scanf:
@@ -240,14 +274,23 @@ _printf:
     cmpb $'f', %al
     je _printf_float
     cmpb $'l', %al
+    je _formato_long_printf
+    cmpb $'h', %al
     jne _fim_printf
 
     movb (%r12), %al
     incq %r12
-    cmpb $'f', %al
-    je _printf_double
     cmpb $'d', %al
-    je _printf_long_int
+    je _printf_short_int
+    jne _fim_printf
+
+    _formato_long_printf:
+        movb (%r12), %al
+        incq %r12
+        cmpb $'f', %al
+        je _printf_double
+        cmpb $'d', %al
+        je _printf_long_int
 
     _printf_int:
         movl %r13d, %edi    # inteiro de entrada
@@ -277,6 +320,12 @@ _printf:
         movq (%r13), %rdi # long int de entrada
         leaq resultado_printf, %rsi
         call _long_int_to_string
+        jmp _fim_printf
+
+    _printf_short_int:
+        movw (%r13), %di # short int de entrada
+        leaq resultado_printf, %rsi
+        call _short_to_string
         jmp _fim_printf
 
     _escrever_resultado_printf:
@@ -570,11 +619,17 @@ _string_to_float:
 
     _fim_loop_fracionario:
 
-    movl -8(%rbp), %eax    
-    cvtsi2ss %eax, %xmm2    # soma a parte fracionária e inteira
+    movl -8(%rbp), %eax
+    cmpl $0, %eax
+    jge _parte_inteira_positiva_float
+    negl %eax
+    
+    _parte_inteira_positiva_float:
+    cvtsi2ss %eax, %xmm2
     addss %xmm2, %xmm0
 
-    cmpl $-1, -12(%rbp)  # verifica sinal
+    # aplica o sinal
+    cmpl $-1, -12(%rbp)
     jne _fim_str_to_float
     movl $-1, %edx
     cvtsi2ss %edx, %xmm1
@@ -643,11 +698,17 @@ _string_to_double:
 
     _fim_loop_fracionario_double:
 
-    movl -8(%rbp), %eax    
-    cvtsi2sd %eax, %xmm2    # soma a parte fracionária e inteira
+    movl -8(%rbp), %eax
+    cmpl $0, %eax
+    jge _parte_inteira_positiva_double
+    negl %eax
+    
+    _parte_inteira_positiva_double:
+    cvtsi2sd %eax, %xmm2 
     addsd %xmm2, %xmm0
 
-    cmpl $-1, -12(%rbp)  # verifica sinal
+    # aplica o sinal
+    cmpl $-1, -12(%rbp)
     jne _fim_str_to_double
     movl $-1, %edx
     cvtsi2sd %edx, %xmm1

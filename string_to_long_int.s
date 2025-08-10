@@ -8,7 +8,7 @@ _start:
     pushq %rbp
     movq %rsp, %rbp
    
-    leaq entrada(%rip), %rdi    # ponteiro da string vai para %rdi
+    leaq entrada, %rdi    # ponteiro da string vai para %rdi
 
     # parâmetro %rdi: ponteiro da entrada
     call _string_to_long_int

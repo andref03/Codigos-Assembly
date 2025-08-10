@@ -10,24 +10,24 @@ _start:
     pushq %rbp
     movq %rsp, %rbp
 
-    movsd double_val(%rip), %xmm0
-    leaq resultado(%rip), %rsi
+    movsd double_val, %xmm0
+    leaq resultado, %rsi
 
     call _double_to_string
 
     # imprime resultado
-    leaq resultado(%rip), %rdi
+    leaq resultado, %rdi
     call _calcula_tamanho_str
     movq %rax, %rdx
     movq $1, %rax
     movq $1, %rdi
-    leaq resultado(%rip), %rsi
+    leaq resultado, %rsi
     syscall
 
     # imprime quebra de linha
     movq $1, %rax
     movq $1, %rdi
-    leaq quebra_linha(%rip), %rsi
+    leaq quebra_linha, %rsi
     movq $1, %rdx
     syscall
 

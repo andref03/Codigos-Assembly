@@ -39,6 +39,8 @@ _start:
     je _char
     cmpl $3, %eax
     je _float
+    cmpl $4, %eax
+    je _double
     jne _fim
 
     _int:
@@ -89,6 +91,22 @@ _start:
         call _printf
         jmp _fim
 
+    _double:
+        movq $1, %rax
+        movq $1, %rdi
+        leaq prompt_entrada, %rsi
+        movq $20, %rdx
+        syscall
+
+        leaq entrada_scanf, %rsi
+        leaq formato_double, %rdi
+        call _scanf
+
+        leaq formato_double, %rdi
+        leaq entrada_scanf, %rsi
+        call _printf
+        jmp _fim
+
     _fim:
         # quebra de linha
         movq $1, %rax
@@ -132,7 +150,13 @@ _scanf:
     je _scanf_char
     cmpb $'f', %al
     je _scanf_float
+    cmpb $'l', %al
     jne _fim_scanf
+
+    movb (%r12), %al
+    incq %r12
+    cmpb $'f', %al
+    je _scanf_double
 
     _scanf_int:
         leaq entrada_scanf, %rdi
@@ -150,6 +174,12 @@ _scanf:
         leaq entrada_scanf, %rdi
         call _string_to_float # resultado em xmm0
         movss %xmm0, (%r13)
+        jmp _fim_scanf
+
+    _scanf_double:
+        leaq entrada_scanf, %rdi
+        call _string_to_double # resultado em xmm0
+        movsd %xmm0, (%r13)
         jmp _fim_scanf
 
     _fim_scanf:
@@ -183,35 +213,36 @@ _printf:
     je _printf_char
     cmpb $'f', %al
     je _printf_float
+    cmpb $'l', %al
+    jne _fim_printf
+
+    movb (%r12), %al
+    incq %r12
+    cmpb $'f', %al
+    je _printf_double
 
     _printf_int:
         movl %r13d, %edi    # inteiro de entrada
         leaq resultado_printf, %rsi
         call _int_to_string # retorna resultado_printf com a string com resposta
-        leaq resultado_printf, %rsi
-        movq $1, %rax
-        movq $1, %rdi
-        call _escrever_resultado_printf
         jmp _fim_printf
 
     _printf_char:
         movw %r13w, %di # char de entrada
         leaq resultado_printf, %rsi
         call _char_to_string
-        leaq resultado_printf, %rsi
-        movq $1, %rax
-        movq $1, %rdi
-        call _escrever_resultado_printf
         jmp _fim_printf
 
     _printf_float:
         movss (%r13), %xmm0 # float de entrada
         leaq resultado_printf, %rsi
         call _float_to_string
+        jmp _fim_printf
+
+    _printf_double:
+        movsd (%r13), %xmm0 # double de entrada
         leaq resultado_printf, %rsi
-        movq $1, %rax
-        movq $1, %rdi
-        call _escrever_resultado_printf
+        call _double_to_string
         jmp _fim_printf
 
     _escrever_resultado_printf:
@@ -228,6 +259,10 @@ _printf:
         ret
 
     _fim_printf:
+        leaq resultado_printf, %rsi
+        movq $1, %rax
+        movq $1, %rdi
+        call _escrever_resultado_printf
         popq %r13
         popq %r12
         popq %rbx

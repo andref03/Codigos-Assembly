@@ -1,5 +1,5 @@
 .section .data
-entrada:    .asciz "+99"
+entrada:    .asciz "102"
 
 .section .text
 .globl _start
@@ -11,63 +11,63 @@ _start:
     leaq entrada(%rip), %rdi    # ponteiro da string vai para %rdi
 
     # parâmetro %rdi: ponteiro da entrada
-    call _string_to_int
+    call _string_to_long_int
 
     popq %rbp
-    # resultado está em %eax
-    movl %eax, %edi
+    # resultado está em %rax
+    movq %rax, %rdi
     movl $60, %eax
     syscall
 
 # ---------------------------------------------------------------------
 
-_string_to_int:
+_string_to_long_int:
     pushq %rbp
     movq %rsp, %rbp
     
-    subq $4, %rsp   # resultado = -4(%rbp)
-    subq $4, %rsp   # sinal = -8(%rbp)
-    subq $4, %rsp   # digito = -12(%rbp)
+    subq $8, %rsp   # resultado = -8(%rbp)
+    subq $8, %rsp   # sinal = -16(%rbp)
+    subq $8, %rsp   # digito = -24(%rbp)
 
-    movl $0, -4(%rbp)   # resultado = 0
-    movl $1, -8(%rbp)   # sinal = 1
+    movq $0, -8(%rbp)   # resultado = 0
+    movq $1, -16(%rbp)  # sinal = 1
 
     movzbl (%rdi), %eax   # %al: caractere atual
     cmpb $'-', %al
-    jne _else_str_to_int
-    movl $-1, -8(%rbp)    # sinal = -1
+    jne _else_str_to_long_int
+    movq $-1, -16(%rbp)   # sinal = -1
     addq $1, %rdi
-    jmp _loop_str_to_int
+    jmp _loop_str_to_long_int
 
-    _else_str_to_int:
+    _else_str_to_long_int:
         cmpb $'+', %al
-        jne _loop_str_to_int
+        jne _loop_str_to_long_int
         addq $1, %rdi
 
-    _loop_str_to_int:
+    _loop_str_to_long_int:
         movzbl (%rdi), %eax
         cmpb $0, %al
-        je _fim_str_to_int
+        je _fim_str_to_long_int
 
         call _char_para_digito
 
-        cmpl $-1, %eax
-        je _fim_str_to_int
+        cmpq $-1, %rax
+        je _fim_str_to_long_int
 
-        movl %eax, -12(%rbp)  # digito
-        movl -4(%rbp), %eax   # resultado
-        imull $10, %eax, %eax
-        addl -12(%rbp), %eax
-        movl %eax, -4(%rbp)
+        movq %rax, -24(%rbp)  # digito
+        movq -8(%rbp), %rax   # resultado
+        imulq $10, %rax, %rax
+        addq -24(%rbp), %rax
+        movq %rax, -8(%rbp)
 
         addq $1, %rdi
-        jmp _loop_str_to_int
+        jmp _loop_str_to_long_int
 
-    _fim_str_to_int:
-        movl -8(%rbp), %edx
-        movl -4(%rbp), %eax
-        imull %edx, %eax
-        addq $12, %rsp
+    _fim_str_to_long_int:
+        movq -16(%rbp), %rdx
+        movq -8(%rbp), %rax
+        imulq %rdx, %rax
+        addq $24, %rsp
         popq %rbp
         ret
 
@@ -88,7 +88,7 @@ _char_para_digito:
     jmp _fim_char_para_digito
 
     _char_invalido:
-        movl $-1, %eax
+        movq $-1, %rax
 
     _fim_char_para_digito:
         popq %rbp

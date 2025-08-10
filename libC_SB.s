@@ -1,13 +1,17 @@
 .section .data
-entrada_string:    .asciz "135"
-entrada_short:    .word 199
-entrada_long_int:  .quad  2872818712
-entrada_int:    .long 214
-entrada_float: .float -21.174
-entrada_double: .double -21.174
-entrada_char:    .byte 'M'
-resultado:  .space 100
+entrada_scanf:      .space 100
+resultado_printf:   .space 100
 quebra_linha:  .asciz "\n"
+
+formato_int:      .asciz "%d"
+formato_char:      .asciz "%c"
+formato_float:      .asciz "%f"
+formato_double:     .asciz "%lf"
+formato_long_int:     .asciz "%ld"
+formato_short_int:    .asciz "%hd"
+
+prompt_escolha: .asciz "Escolha o tipo do formato (1: int, 2: char, 3: float, 4: double, 5: long int, 6: short int): "
+prompt_entrada:  .asciz ">> Entrada: "
 
 .section .text
 .globl _start
@@ -15,13 +19,144 @@ quebra_linha:  .asciz "\n"
 _start:
     pushq %rbp
     movq %rsp, %rbp
-   
-    leaq entrada_string, %rdi    # ponteiro da string vai para %rdi
-
-    popq %rbp
-    movq $0, %rdi
-    movl $60, %eax
+    
+    movq $1, %rax
+    movq $1, %rdi
+    leaq prompt_escolha, %rsi   # escolha
+    movq $93, %rdx
     syscall
+
+    # converte entrada pra inteiro
+    movq $formato_int, %rdi
+    leaq entrada_scanf, %rsi
+    xor %rax, %rax
+    call _scanf
+
+    movl entrada_scanf, %eax
+    cmpl $1, %eax
+    je _int
+    jne _fim
+
+    _int:
+        movq $1, %rax
+        movq $1, %rdi
+        leaq prompt_entrada, %rsi
+        movq $20, %rdx
+        syscall
+
+        leaq entrada_scanf, %rsi
+        leaq formato_int, %rdi
+        call _scanf
+
+        leaq formato_int, %rdi
+        movl entrada_scanf, %esi
+        call _printf
+        jmp _fim
+
+    _fim:
+        # quebra de linha
+        movq $1, %rax
+        movq $1, %rdi
+        leaq quebra_linha, %rsi
+        movq $1, %rdx
+        syscall
+
+        movq $60, %rax
+        movq $0, %rdi
+        syscall
+
+# ---------------------------------------------------------------------
+
+_scanf:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+
+    movq %rdi, %r12  # formato da string
+    movq %rsi, %r13  # destino
+
+    movq $0, %rax
+    movq $0, %rdi
+    leaq entrada_scanf, %rsi
+    movq $120, %rdx
+    syscall
+
+    # identifica o formato
+    movb (%r12), %al
+    incq %r12
+    cmpb $'%', %al
+    jne _fim_scanf
+
+    movb (%r12), %al
+    incq %r12
+    cmpb $'d', %al
+    je _scanf_int
+
+    _scanf_int:
+        leaq entrada_scanf, %rdi
+        call _string_to_int # resultado em eax        
+        movl %eax, (%r13)
+        jmp _fim_scanf
+
+    _fim_scanf:
+        popq %r12
+        popq %rbx
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+_printf:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+
+    movq %rdi, %r12  # formato da string
+    movq %rsi, %r13  # entrada
+
+    movb (%r12), %al
+    incq %r12
+    cmpb $'%', %al
+    jne _fim_printf
+
+    movb (%r12), %al
+    incq %r12
+    cmpb $'d', %al
+    je _printf_int
+
+    _printf_int:
+        movl %r13d, %edi    # inteiro de entrada
+        leaq resultado_printf, %rsi
+        call _int_to_string # retorna resultado_printf com a string com resposta
+        leaq resultado_printf, %rsi
+        movq $1, %rax
+        movq $1, %rdi
+        call _escrever_resultado_printf
+        jmp _fim_printf
+
+    _escrever_resultado_printf:
+        pushq %rbp
+        movq %rsp, %rbp
+        
+        movq %rsi, %rdi # rdi: resultado_printf
+        call _calcula_tamanho_str   # retorna tamanho em rax
+        movq %rax, %rdx
+        movq $1, %rax
+        movq $1, %rdi
+        # movq %rsi, %rsi
+        syscall
+        leave
+        ret
+
+    _fim_printf:
+        popq %r13
+        popq %r12
+        popq %rbx
+        popq %rbp
+        ret
 
 # ---------------------------------------------------------------------
 
@@ -456,7 +591,7 @@ _short_to_string:
 
     _loop_short_to_str:
         movw $0, %dx
-        idivw %bx           # divide ax por 10, dx = resto
+        idivw %bx   # divide ax por 10, dx = resto
         addb $'0', %dl
         movb %dl, (%r8,%rcx,1)
         incq %rcx
@@ -537,7 +672,7 @@ _long_int_to_string:
 
     _loop_long_int_to_str:
         movq $0, %rdx
-        idivq %rbx          # divide rax por 10, rdx = resto
+        idivq %rbx # resto em rdx
         addb $'0', %dl
         movb %dl, (%r8,%rcx,1)
         incq %rcx
@@ -601,7 +736,7 @@ _int_to_string:
     movl $10, %ebx
 
     # número negativo
-    cmp $0, %eax
+    cmpl $0, %eax
     jge _positivo_int_to_str
     movb $'-', (%r8)
     incq %r8
@@ -609,7 +744,7 @@ _int_to_string:
     
     _positivo_int_to_str:
         # número zero
-        cmp $0, %eax
+        cmpl $0, %eax
         jne _loop_int_to_str
         movb $'0', (%r8)
         incq %r8
@@ -618,11 +753,11 @@ _int_to_string:
 
     _loop_int_to_str:
         movl $0, %edx
-        idivl %ebx          # divide eax por 10, edx = resto
+        idivl %ebx  # edx = resto
         addb $'0', %dl
         movb %dl, (%r8,%rcx,1)
         incq %rcx
-        cmp $0, %eax
+        cmpl $0, %eax
         jne _loop_int_to_str
 
         # inverte string
@@ -633,7 +768,7 @@ _int_to_string:
         _inverte_str:
             cmpq %rax, %r9
             jle _fim_str
-            movb (%r8,%rax,1), %dl
+            movb (%r8,%rax,1), %dl  # 1 byte
             movb (%r8,%r9,1), %cl
             movb %cl, (%r8,%rax,1)
             movb %dl, (%r8,%r9,1)
@@ -767,7 +902,7 @@ _double_to_string:
 
     _sinal_tratado_double_to_str:
 
-        cvttsd2si %xmm0, %rax   # xmm0 arredondo para inteiro (64 bits)
+        cvttsd2si %xmm0, %rax   # xmm0 arredondo para inteiro
         movq %rax, %r10
         movq %rax, %rdi
         movq %r8, %rsi

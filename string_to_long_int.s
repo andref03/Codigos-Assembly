@@ -49,7 +49,7 @@ _string_to_long_int:
         cmpb $0, %al
         je _fim_str_to_long_int
 
-        call _char_para_digito
+        call _char_para_digito_long
 
         cmpq $-1, %rax
         je _fim_str_to_long_int
@@ -73,23 +73,23 @@ _string_to_long_int:
 
 # ---------------------------------------------------------------------
 
-_char_para_digito:
+_char_para_digito_long:
     pushq %rbp
     movq %rsp, %rbp
     movzbl (%rdi), %eax
 
     cmpb $'0', %al
-    jl _char_invalido
+    jl _char_invalido_long
     cmpb $'9', %al
-    jg _char_invalido
+    jg _char_invalido_long
 
     subb $'0', %al
     movzbl %al, %eax
-    jmp _fim_char_para_digito
+    jmp _fim_char_para_digito_long
 
-    _char_invalido:
+    _char_invalido_long:
         movq $-1, %rax
 
-    _fim_char_para_digito:
+    _fim_char_para_digito_long:
         popq %rbp
         ret

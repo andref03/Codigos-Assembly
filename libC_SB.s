@@ -35,6 +35,8 @@ _start:
     movl entrada_scanf, %eax
     cmpl $1, %eax
     je _int
+    cmpl $2, %eax
+    je _char
     jne _fim
 
     _int:
@@ -50,6 +52,22 @@ _start:
 
         leaq formato_int, %rdi
         movl entrada_scanf, %esi
+        call _printf
+        jmp _fim
+
+    _char:
+        movq $1, %rax
+        movq $1, %rdi
+        leaq prompt_entrada, %rsi
+        movq $20, %rdx
+        syscall
+
+        leaq entrada_scanf, %rsi
+        leaq formato_char, %rdi
+        call _scanf
+
+        leaq formato_char, %rdi
+        movw entrada_scanf, %si
         call _printf
         jmp _fim
 
@@ -92,11 +110,19 @@ _scanf:
     incq %r12
     cmpb $'d', %al
     je _scanf_int
+    cmpb $'c', %al
+    je _scanf_char
 
     _scanf_int:
         leaq entrada_scanf, %rdi
         call _string_to_int # resultado em eax        
         movl %eax, (%r13)
+        jmp _fim_scanf
+
+    _scanf_char:
+        leaq entrada_scanf, %rdi
+        call _string_to_char # resultado em ax
+        movw %ax, (%r13)
         jmp _fim_scanf
 
     _fim_scanf:
@@ -126,11 +152,23 @@ _printf:
     incq %r12
     cmpb $'d', %al
     je _printf_int
+    cmpb $'c', %al
+    je _printf_char
 
     _printf_int:
         movl %r13d, %edi    # inteiro de entrada
         leaq resultado_printf, %rsi
         call _int_to_string # retorna resultado_printf com a string com resposta
+        leaq resultado_printf, %rsi
+        movq $1, %rax
+        movq $1, %rdi
+        call _escrever_resultado_printf
+        jmp _fim_printf
+
+    _printf_char:
+        movw %r13w, %di # char de entrada
+        leaq resultado_printf, %rsi
+        call _char_to_string
         leaq resultado_printf, %rsi
         movq $1, %rax
         movq $1, %rdi
@@ -146,7 +184,6 @@ _printf:
         movq %rax, %rdx
         movq $1, %rax
         movq $1, %rdi
-        # movq %rsi, %rsi
         syscall
         leave
         ret

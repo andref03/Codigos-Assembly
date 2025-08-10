@@ -10,8 +10,20 @@ formato_double:     .asciz "%lf"
 formato_long_int:     .asciz "%ld"
 formato_short_int:    .asciz "%hd"
 
-prompt_escolha: .asciz "Escolha o tipo do formato \n(1: int) (2: char) (3: float) (4: double) (5: long int) (6: short int): "
+prompt_escolha: .asciz "Escolha o tipo do formato \n(1: int) (2: char) (3: float) (4: double) (5: long int) (6: short int) (7: arquivos): "
 prompt_entrada:  .asciz ">> Entrada: "
+
+qtdd_arquivos:         .quad 0
+qtdd_limite_arquivos:  .quad 128
+tabela_arquivos:       .space 400
+arquivo:                .asciz "aaaaaa.txt"
+
+tipo_r:             .asciz "r"
+tipo_w:             .asciz "w"
+tipo_a:             .asciz "a"
+tipo_r_mais:         .asciz "r+"
+tipo_w_mais:         .asciz "w+"
+tipo_a_mais:         .asciz "a+"
 
 .section .text
 .globl _start
@@ -23,7 +35,7 @@ _start:
     movq $1, %rax
     movq $1, %rdi
     leaq prompt_escolha, %rsi   # escolha
-    movq $99, %rdx
+    movq $113, %rdx
     syscall
 
     # converte entrada pra inteiro
@@ -45,6 +57,8 @@ _start:
     je _long_int
     cmpl $6, %eax
     je _short_int
+    cmpl $7, %eax
+    je _arquivos
     jne _fim
 
     _int:
@@ -142,6 +156,17 @@ _start:
         leaq entrada_scanf, %rsi
         call _printf
         jmp _fim
+
+    _arquivos:
+        
+        leaq arquivo, %rdi
+        leaq tipo_w, %rsi   # abre pra escrita
+        call _fopen
+        movq %rax, %r10
+
+        # Fecha arquivo
+        movq %r10, %rdi
+        call _fclose
 
     _fim:
         # quebra de linha
@@ -1180,5 +1205,171 @@ _char_to_string:
     movb $0, (%r8)
 
     _fim_char_to_str:
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+_fopen:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+
+    movq %rdi, %r12  # arquivo
+    movq %rsi, %r13  # tipo
+
+        # Verifica se ainda há espaço na tabela de arquivos
+    movq qtdd_arquivos, %rax
+    cmpq qtdd_limite_arquivos, %rax
+    jge _erro_abertura
+
+    movq %r13, %rdi
+    call _descobre_flags   # converte tipo para as flags corretas
+    movq %rax, %rbx  # rbx: flags
+
+    movq $2, %rax
+    movq %r12, %rdi
+    movq %rbx, %rsi
+    movq $256, %rdx # leitura só do proprietário S_IRUSR
+    orq  $128, %rdx # escrita só do proprietário S_IWUSR
+    syscall
+
+    # erro se rax menor que zero
+    cmpq $0, %rax
+    jl _erro_abertura
+
+    movq qtdd_arquivos, %rbx
+    movq %rax, tabela_arquivos(,%rbx,8)  # armazena arquivo
+    incq qtdd_arquivos
+    leaq tabela_arquivos(,%rbx,8), %rax
+    jmp _fim_fopen
+
+    _erro_abertura:
+        # nulo
+        movq $0, %rax
+
+    _fim_fopen:
+        popq %r13
+        popq %r12
+        popq %rbx
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+_fclose:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+
+    cmpq $0, %rdi
+    je _erro_fechar_arquivo
+
+    leaq tabela_arquivos, %rax
+    subq %rax, %rdi
+    movq $8, %rbx
+    movq $0, %rdx
+    divq %rbx
+    movq %rax, %rbx  # índice em %rbx
+
+    movq tabela_arquivos(,%rbx,8), %rdi  # pega o arquivo
+
+    movq $3, %rax    # sys_close
+    syscall
+
+    cmpq $0, %rax
+    jl _erro_fechar_arquivo
+
+    movq $-1, tabela_arquivos(,%rbx,8)  # remove da tabela
+    movq $0, %rax
+    jmp _fim_fclose
+
+    _erro_fechar_arquivo:
+        movq $-1, %rax
+
+    _fim_fclose:
+        popq %rbx
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+_descobre_flags:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+
+    movq %rdi, %r12  # tipo
+
+    # Compara com modos conhecidos
+    leaq tipo_r, %r13
+    call _compara_tipos
+    cmpq $1, %rax
+    je _tipo_r
+
+    leaq tipo_w, %r13
+    call _compara_tipos
+    cmpq $1, %rax
+    je _tipo_w
+
+    leaq tipo_a, %r13
+    call _compara_tipos
+    cmpq $1, %rax
+    je _tipo_a
+    cmpq $-1, %rax
+    je _retorna_flag
+
+
+    _compara_tipos:
+        pushq %rbp
+        movq %rsp, %rbp
+
+        _loop_compara_tipos:
+            movb (%r12), %al
+            movb (%r13), %bl
+            cmpb %al, %bl
+            jne _tipos_diferentes
+            cmpb $0, %al
+            je _tipos_iguais
+            incq %r12
+            incq %r13
+            jmp _loop_compara_tipos
+
+        _tipos_iguais:
+            movq $1, %rax
+            jmp _fim_compara_tipos
+
+        _tipos_diferentes:
+            movq $-1, %rax
+
+        _fim_compara_tipos:
+            popq %rbp
+            ret
+
+
+    _tipo_r:
+    movq $0, %rax # flag somente leitura
+    jmp _retorna_flag
+
+    _tipo_w:
+        movq $1, %rax # somente escrita
+        orq  $64, %rax # criar
+        orq  $512, %rax # truncar
+        jmp _retorna_flag
+
+    _tipo_a:
+        movq $1, %rax # somente escrita
+        orq  $64, %rax # criar
+        orq  $1024, %rax # anexar
+        jmp _retorna_flag
+
+    _retorna_flag:
+        popq %r12
+        popq %r13
+        popq %rbx
         popq %rbp
         ret

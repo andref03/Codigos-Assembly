@@ -1,3 +1,6 @@
+# execução:
+# as --64 libC_SB.s -o exe.o ; ld -o exe exe.o ; ./exe
+
 .section .data
 entrada_scanf:      .space 100
 resultado_printf:   .space 100

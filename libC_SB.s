@@ -353,25 +353,25 @@ _printf:
         jmp _fim_printf
 
     _printf_float:
-        movss (%r13), %xmm0 # float de entrada
+        movss (%r13), %xmm0
         leaq resultado_printf, %rsi
         call _float_to_string
         jmp _fim_printf
 
     _printf_double:
-        movsd (%r13), %xmm0 # double de entrada
+        movsd (%r13), %xmm0
         leaq resultado_printf, %rsi
         call _double_to_string
         jmp _fim_printf
     
     _printf_long_int:
-        movq (%r13), %rdi # long int de entrada
+        movq (%r13), %rdi
         leaq resultado_printf, %rsi
         call _long_int_to_string
         jmp _fim_printf
 
     _printf_short_int:
-        movw (%r13), %di # short int de entrada
+        movw (%r13), %di
         leaq resultado_printf, %rsi
         call _short_to_string
         jmp _fim_printf
@@ -381,7 +381,7 @@ _printf:
         movq %rsp, %rbp
         
         movq %rsi, %rdi # rdi: resultado_printf
-        call _calcula_tamanho_str   # retorna tamanho em rax
+        call _calcula_tamanho_str   # rax: tamaho
         movq %rax, %rdx
         movq $1, %rax
         movq $1, %rdi
@@ -402,7 +402,6 @@ _printf:
         ret
 
 # ---------------------------------------------------------------------
-
 
 _fopen:
     pushq %rbp
@@ -429,7 +428,6 @@ _fopen:
     orq  $128, %rdx # escrita só do proprietário S_IWUSR
     syscall
 
-    # erro se rax menor que zero
     cmpq $0, %rax
     jl _erro_abertura
 
@@ -458,14 +456,14 @@ _fclose:
     pushq %r12
 
     cmpq $0, %rdi
-    je _erro_fechar_arquivo
+    je _erro_fclose
 
     movq %rdi, %r12  # descritor de arquivo
     movq $0, %rbx
 
     _procura_descritor:
         cmpq qtdd_limite_arquivos, %rbx
-        jge _erro_fechar_arquivo
+        jge _erro_fclose
         
         movq tabela_arquivos(,%rbx,8), %rax
         cmpq %r12, %rax
@@ -480,13 +478,13 @@ _fclose:
         syscall
 
         cmpq $0, %rax
-        jl _erro_fechar_arquivo
+        jl _erro_fclose
 
         movq $-1, tabela_arquivos(,%rbx,8)  # remove da tabela
         movq $0, %rax
         jmp _fim_fclose
 
-    _erro_fechar_arquivo:
+    _erro_fclose:
         movq $-1, %rax
 
     _fim_fclose:
@@ -832,7 +830,7 @@ _fscanf:
         popq %rbp
         ret
 
-# ---------------------------------------------------------------------
+# -------------------------- funções pra conversão (das atividades anteriores) -------------------------------------------
 
 _string_to_short:
     pushq %rbp
@@ -982,7 +980,6 @@ _char_para_digito_long:
         popq %rbp
         ret
 
-
 # ---------------------------------------------------------------------
 
 _string_to_int:
@@ -1057,7 +1054,6 @@ _char_para_digito:
     _fim_char_para_digito:
         popq %rbp
         ret
-
 
 # ---------------------------------------------------------------------
 
@@ -1137,7 +1133,6 @@ _retorna_fracao_float:
     popq %rbp
     ret
 
-
 # ---------------------------------------------------------------------
 
 _string_to_double:
@@ -1216,7 +1211,6 @@ _retorna_fracao_double:
     popq %rbp
     ret
 
-
 # ---------------------------------------------------------------------
 
 _string_to_char:
@@ -1244,7 +1238,6 @@ _string_to_char:
         addq $2, %rsp
         popq %rbp
         ret
-
 
 # ---------------------------------------------------------------------
 
@@ -1326,7 +1319,6 @@ _calcula_tamanho_str_short:
         leave
         ret
 
-
 # ---------------------------------------------------------------------
 
 _long_int_to_string:
@@ -1406,7 +1398,6 @@ _calcula_tamanho_str_long_int:
     _fim_loop_tam_long_int:
         leave
         ret
-
 
 # ---------------------------------------------------------------------
 
@@ -1488,7 +1479,6 @@ _calcula_tamanho_str:
         leave
         ret
 
-
 # -------------------------------------------------------------------
 
 _float_to_string:
@@ -1567,6 +1557,7 @@ _float_to_string:
         popq %rbp
         ret
 
+# ---------------------------------------------------------------------
 
 _double_to_string:
     pushq %rbp
@@ -1643,7 +1634,6 @@ _double_to_string:
         movb $0, (%r9)
         popq %rbp
         ret
-
 
 # ---------------------------------------------------------------------
 

@@ -16,8 +16,8 @@ prompt_entrada:  .asciz ">> Entrada: "
 qtdd_arquivos:         .quad 0
 qtdd_limite_arquivos:  .quad 128
 tabela_arquivos:       .space 400
-arquivo1:                .asciz "a_teste.txt"
-arquivo2:                .asciz "b_teste.txt"
+arquivo1:   .asciz "a_teste.txt"
+arquivo2:   .asciz "b_teste.txt"
 
 tipo_r:             .asciz "r"
 tipo_w:             .asciz "w"
@@ -395,6 +395,399 @@ _printf:
         popq %r13
         popq %r12
         popq %rbx
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+
+_fopen:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+
+    movq %rdi, %r12  # arquivo
+    movq %rsi, %r13  # tipo
+
+    movq qtdd_arquivos, %rax
+    cmpq qtdd_limite_arquivos, %rax
+    jge _erro_abertura
+
+    movq %r13, %rdi
+    call _descobre_flags   # converte tipo para as flags corretas
+    movq %rax, %rbx  # rbx: flags
+
+    movq $2, %rax
+    movq %r12, %rdi
+    movq %rbx, %rsi
+    movq $256, %rdx # leitura só do proprietário S_IRUSR
+    orq  $128, %rdx # escrita só do proprietário S_IWUSR
+    syscall
+
+    # erro se rax menor que zero
+    cmpq $0, %rax
+    jl _erro_abertura
+
+    movq qtdd_arquivos, %rbx
+    movq %rax, tabela_arquivos(,%rbx,8)  # descritor de arquivo
+    incq qtdd_arquivos
+    jmp _fim_fopen
+
+    _erro_abertura:
+        # nulo
+        movq $0, %rax
+
+    _fim_fopen:
+        popq %r13
+        popq %r12
+        popq %rbx
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+_fclose:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+
+    cmpq $0, %rdi
+    je _erro_fechar_arquivo
+
+    movq %rdi, %r12  # descritor de arquivo
+    movq $0, %rbx
+
+    _procura_descritor:
+        cmpq qtdd_limite_arquivos, %rbx
+        jge _erro_fechar_arquivo
+        
+        movq tabela_arquivos(,%rbx,8), %rax
+        cmpq %r12, %rax
+        je _encontrou_descritor
+        
+        incq %rbx
+        jmp _procura_descritor
+
+    _encontrou_descritor:
+        movq $3, %rax    # sys_close
+        movq %r12, %rdi
+        syscall
+
+        cmpq $0, %rax
+        jl _erro_fechar_arquivo
+
+        movq $-1, tabela_arquivos(,%rbx,8)  # remove da tabela
+        movq $0, %rax
+        jmp _fim_fclose
+
+    _erro_fechar_arquivo:
+        movq $-1, %rax
+
+    _fim_fclose:
+        popq %r12
+        popq %rbx
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+_compara_tipos:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %r12
+    pushq %r13
+
+    movq %rdi, %r12
+    movq %rsi, %r13
+
+    _loop_compara_tipos:
+        movb (%r12), %al
+        movb (%r13), %bl
+        cmpb %al, %bl
+        jne _tipos_diferentes
+        cmpb $0, %al
+        je _tipos_iguais
+        incq %r12
+        incq %r13
+        jmp _loop_compara_tipos
+
+    _tipos_iguais:
+        movq $1, %rax
+        jmp _fim_compara_tipos
+
+    _tipos_diferentes:
+        movq $-1, %rax
+
+    _fim_compara_tipos:
+        popq %r13
+        popq %r12
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+_descobre_flags:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+
+    movq %rdi, %r12  # tipo
+
+    movq %r12, %rdi
+    leaq tipo_r, %rsi
+    call _compara_tipos
+    cmpq $1, %rax
+    je _tipo_r
+
+    movq %r12, %rdi
+    leaq tipo_w, %rsi
+    call _compara_tipos
+    cmpq $1, %rax
+    je _tipo_w
+
+    movq %r12, %rdi
+    leaq tipo_a, %rsi
+    call _compara_tipos
+    cmpq $1, %rax
+    je _tipo_a
+    jmp _retorna_flag
+
+    _tipo_r:
+        movq $0, %rax # flag somente leitura
+        jmp _retorna_flag
+
+    _tipo_w:
+        movq $1, %rax # somente escrita
+        orq  $64, %rax # criar
+        orq  $512, %rax # truncar
+        jmp _retorna_flag
+
+    _tipo_a:
+        movq $1, %rax # somente escrita
+        orq  $64, %rax # criar
+        orq  $1024, %rax # anexar
+        jmp _retorna_flag
+
+    _retorna_flag:
+        popq %r12
+        popq %rbx
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+_fprintf:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+
+    movq %rdi, %rbx
+    movq %rsi, %r12 # tipo
+    movq %rdx, %r13 # valor
+
+    # tipo
+    movb (%r12), %al
+    incq %r12
+    cmpb $'%', %al
+    jne _fim_fprintf
+
+    movb (%r12), %al
+    incq %r12
+    cmpb $'d', %al
+    je _fprintf_int
+    cmpb $'c', %al
+    je _fprintf_char
+    cmpb $'f', %al
+    je _fprintf_float
+    cmpb $'l', %al
+    je _fprintf_long
+    cmpb $'h', %al
+    je _fprintf_short
+    jmp _fim_fprintf
+
+    _fprintf_long:
+        movb (%r12), %al
+        incq %r12
+        cmpb $'f', %al
+        je _fprintf_double
+        cmpb $'d', %al
+        je _fprintf_long_int
+        jmp _fim_fprintf
+
+    _fprintf_short:
+        movb (%r12), %al
+        incq %r12
+        cmpb $'d', %al
+        je _fprintf_short_int
+        jmp _fim_fprintf
+
+    _fprintf_int:
+        movl %r13d, %edi
+        leaq resultado_printf, %rsi
+        call _int_to_string
+        jmp _escrever_resultado_fprintf
+
+    _fprintf_char:
+        movw %r13w, %di
+        leaq resultado_printf, %rsi
+        call _char_to_string
+        jmp _escrever_resultado_fprintf
+
+    _fprintf_float:
+        movss (%r13), %xmm0
+        leaq resultado_printf, %rsi
+        call _float_to_string
+        jmp _escrever_resultado_fprintf
+
+    _fprintf_double:
+        movsd (%r13), %xmm0
+        leaq resultado_printf, %rsi
+        call _double_to_string
+        jmp _escrever_resultado_fprintf
+
+    _fprintf_long_int:
+        movq (%r13), %rdi
+        leaq resultado_printf, %rsi
+        call _long_int_to_string
+        jmp _escrever_resultado_fprintf
+
+    _fprintf_short_int:
+        movw (%r13), %di
+        leaq resultado_printf, %rsi
+        call _short_to_string
+        jmp _escrever_resultado_fprintf
+
+    _escrever_resultado_fprintf:
+        leaq resultado_printf, %rdi
+        call _calcula_tamanho_str   # rax: tamanho da string
+        movq %rax, %rdx
+
+        movq $1, %rax
+        movq %rbx, %rdi
+        leaq resultado_printf, %rsi
+        syscall
+
+    _fim_fprintf:
+        popq %r13
+        popq %r12
+        popq %rbx
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+_fscanf:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+
+    movq %rdi, %rbx
+    movq %rsi, %r12 # tipo
+    movq %rdx, %r13 # valor
+
+    # tipo
+    movb (%r12), %al
+    incq %r12
+    cmpb $'%', %al
+    jne _fim_fscanf
+
+    movb (%r12), %al
+    incq %r12
+    cmpb $'d', %al
+    je _fscanf_int
+    cmpb $'c', %al
+    je _fscanf_char
+    cmpb $'f', %al
+    je _fscanf_float
+    cmpb $'l', %al
+    je _fscanf_long
+    cmpb $'h', %al
+    je _fscanf_short
+    jmp _fim_fscanf
+
+    _fscanf_long:
+        movb (%r12), %al
+        incq %r12
+        cmpb $'f', %al
+        je _fscanf_double
+        cmpb $'d', %al
+        je _fscanf_long_int
+        jmp _fim_fscanf
+
+    _fscanf_short:
+        movb (%r12), %al
+        incq %r12
+        cmpb $'d', %al
+        je _fscanf_short_int
+        jmp _fim_fscanf
+
+    _fscanf_read:
+        movq $0, %rax
+        movq %rbx, %rdi
+        leaq entrada_scanf, %rsi
+        movq $32, %rdx
+        syscall
+        
+        cmpq $0, %rax
+        jle _fim_fscanf
+        ret
+
+    _fscanf_int:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_int
+        movl %eax, (%r13)
+        jmp _fim_fscanf
+
+    _fscanf_char:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_char
+        movw %ax, (%r13)
+        jmp _fim_fscanf
+
+    _fscanf_float:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_float
+        movss %xmm0, (%r13)
+        jmp _fim_fscanf
+
+    _fscanf_double:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_double
+        movsd %xmm0, (%r13)
+        jmp _fim_fscanf
+
+    _fscanf_long_int:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_long_int
+        movq %rax, (%r13)
+        jmp _fim_fscanf
+
+    _fscanf_short_int:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_short
+        movw %ax, (%r13)
+        jmp _fim_fscanf
+
+    _fim_fscanf:
+        popq %r13
+        popq %r12
+        popq %rbx
+        popq %rbp
+        ret
         popq %rbp
         ret
 
@@ -1225,397 +1618,5 @@ _char_to_string:
     movb $0, (%r8)
 
     _fim_char_to_str:
-        popq %rbp
-        ret
-
-# ---------------------------------------------------------------------
-
-_fopen:
-    pushq %rbp
-    movq %rsp, %rbp
-    pushq %rbx
-    pushq %r12
-    pushq %r13
-
-    movq %rdi, %r12  # arquivo
-    movq %rsi, %r13  # tipo
-
-    movq qtdd_arquivos, %rax
-    cmpq qtdd_limite_arquivos, %rax
-    jge _erro_abertura
-
-    movq %r13, %rdi
-    call _descobre_flags   # converte tipo para as flags corretas
-    movq %rax, %rbx  # rbx: flags
-
-    movq $2, %rax
-    movq %r12, %rdi
-    movq %rbx, %rsi
-    movq $256, %rdx # leitura só do proprietário S_IRUSR
-    orq  $128, %rdx # escrita só do proprietário S_IWUSR
-    syscall
-
-    # erro se rax menor que zero
-    cmpq $0, %rax
-    jl _erro_abertura
-
-    movq qtdd_arquivos, %rbx
-    movq %rax, tabela_arquivos(,%rbx,8)  # descritor de arquivo
-    incq qtdd_arquivos
-    jmp _fim_fopen
-
-    _erro_abertura:
-        # nulo
-        movq $0, %rax
-
-    _fim_fopen:
-        popq %r13
-        popq %r12
-        popq %rbx
-        popq %rbp
-        ret
-
-# ---------------------------------------------------------------------
-
-_fclose:
-    pushq %rbp
-    movq %rsp, %rbp
-    pushq %rbx
-    pushq %r12
-
-    cmpq $0, %rdi
-    je _erro_fechar_arquivo
-
-    movq %rdi, %r12  # descritor de arquivo
-    movq $0, %rbx
-
-    _procura_descritor:
-        cmpq qtdd_limite_arquivos, %rbx
-        jge _erro_fechar_arquivo
-        
-        movq tabela_arquivos(,%rbx,8), %rax
-        cmpq %r12, %rax
-        je _encontrou_descritor
-        
-        incq %rbx
-        jmp _procura_descritor
-
-    _encontrou_descritor:
-        movq $3, %rax    # sys_close
-        movq %r12, %rdi
-        syscall
-
-        cmpq $0, %rax
-        jl _erro_fechar_arquivo
-
-        movq $-1, tabela_arquivos(,%rbx,8)  # remove da tabela
-        movq $0, %rax
-        jmp _fim_fclose
-
-    _erro_fechar_arquivo:
-        movq $-1, %rax
-
-    _fim_fclose:
-        popq %r12
-        popq %rbx
-        popq %rbp
-        ret
-
-# ---------------------------------------------------------------------
-
-_compara_tipos:
-    pushq %rbp
-    movq %rsp, %rbp
-    pushq %r12
-    pushq %r13
-
-    movq %rdi, %r12
-    movq %rsi, %r13
-
-    _loop_compara_tipos:
-        movb (%r12), %al
-        movb (%r13), %bl
-        cmpb %al, %bl
-        jne _tipos_diferentes
-        cmpb $0, %al
-        je _tipos_iguais
-        incq %r12
-        incq %r13
-        jmp _loop_compara_tipos
-
-    _tipos_iguais:
-        movq $1, %rax
-        jmp _fim_compara_tipos
-
-    _tipos_diferentes:
-        movq $-1, %rax
-
-    _fim_compara_tipos:
-        popq %r13
-        popq %r12
-        popq %rbp
-        ret
-
-# ---------------------------------------------------------------------
-
-_descobre_flags:
-    pushq %rbp
-    movq %rsp, %rbp
-    pushq %rbx
-    pushq %r12
-
-    movq %rdi, %r12  # tipo
-
-    movq %r12, %rdi
-    leaq tipo_r, %rsi
-    call _compara_tipos
-    cmpq $1, %rax
-    je _tipo_r
-
-    movq %r12, %rdi
-    leaq tipo_w, %rsi
-    call _compara_tipos
-    cmpq $1, %rax
-    je _tipo_w
-
-    movq %r12, %rdi
-    leaq tipo_a, %rsi
-    call _compara_tipos
-    cmpq $1, %rax
-    je _tipo_a
-    jmp _retorna_flag
-
-    _tipo_r:
-        movq $0, %rax # flag somente leitura
-        jmp _retorna_flag
-
-    _tipo_w:
-        movq $1, %rax # somente escrita
-        orq  $64, %rax # criar
-        orq  $512, %rax # truncar
-        jmp _retorna_flag
-
-    _tipo_a:
-        movq $1, %rax # somente escrita
-        orq  $64, %rax # criar
-        orq  $1024, %rax # anexar
-        jmp _retorna_flag
-
-    _retorna_flag:
-        popq %r12
-        popq %rbx
-        popq %rbp
-        ret
-
-# ---------------------------------------------------------------------
-
-_fprintf:
-    pushq %rbp
-    movq %rsp, %rbp
-    pushq %rbx
-    pushq %r12
-    pushq %r13
-
-    movq %rdi, %rbx
-    movq %rsi, %r12 # tipo
-    movq %rdx, %r13 # valor
-
-    # tipo
-    movb (%r12), %al
-    incq %r12
-    cmpb $'%', %al
-    jne _fim_fprintf
-
-    movb (%r12), %al
-    incq %r12
-    cmpb $'d', %al
-    je _fprintf_int
-    cmpb $'c', %al
-    je _fprintf_char
-    cmpb $'f', %al
-    je _fprintf_float
-    cmpb $'l', %al
-    je _fprintf_long
-    cmpb $'h', %al
-    je _fprintf_short
-    jmp _fim_fprintf
-
-    _fprintf_long:
-        movb (%r12), %al
-        incq %r12
-        cmpb $'f', %al
-        je _fprintf_double
-        cmpb $'d', %al
-        je _fprintf_long_int
-        jmp _fim_fprintf
-
-    _fprintf_short:
-        movb (%r12), %al
-        incq %r12
-        cmpb $'d', %al
-        je _fprintf_short_int
-        jmp _fim_fprintf
-
-    _fprintf_int:
-        movl %r13d, %edi
-        leaq resultado_printf, %rsi
-        call _int_to_string
-        jmp _escrever_resultado_fprintf
-
-    _fprintf_char:
-        movw %r13w, %di
-        leaq resultado_printf, %rsi
-        call _char_to_string
-        jmp _escrever_resultado_fprintf
-
-    _fprintf_float:
-        movss (%r13), %xmm0
-        leaq resultado_printf, %rsi
-        call _float_to_string
-        jmp _escrever_resultado_fprintf
-
-    _fprintf_double:
-        movsd (%r13), %xmm0
-        leaq resultado_printf, %rsi
-        call _double_to_string
-        jmp _escrever_resultado_fprintf
-
-    _fprintf_long_int:
-        movq (%r13), %rdi
-        leaq resultado_printf, %rsi
-        call _long_int_to_string
-        jmp _escrever_resultado_fprintf
-
-    _fprintf_short_int:
-        movw (%r13), %di
-        leaq resultado_printf, %rsi
-        call _short_to_string
-        jmp _escrever_resultado_fprintf
-
-    _escrever_resultado_fprintf:
-        leaq resultado_printf, %rdi
-        call _calcula_tamanho_str   # rax: tamanho da string
-        movq %rax, %rdx
-
-        movq $1, %rax
-        movq %rbx, %rdi
-        leaq resultado_printf, %rsi
-        syscall
-
-    _fim_fprintf:
-        popq %r13
-        popq %r12
-        popq %rbx
-        popq %rbp
-        ret
-
-# ---------------------------------------------------------------------
-
-_fscanf:
-    pushq %rbp
-    movq %rsp, %rbp
-    pushq %rbx
-    pushq %r12
-    pushq %r13
-
-    movq %rdi, %rbx
-    movq %rsi, %r12 # tipo
-    movq %rdx, %r13 # valor
-
-    # tipo
-    movb (%r12), %al
-    incq %r12
-    cmpb $'%', %al
-    jne _fim_fscanf
-
-    movb (%r12), %al
-    incq %r12
-    cmpb $'d', %al
-    je _fscanf_int
-    cmpb $'c', %al
-    je _fscanf_char
-    cmpb $'f', %al
-    je _fscanf_float
-    cmpb $'l', %al
-    je _fscanf_long
-    cmpb $'h', %al
-    je _fscanf_short
-    jmp _fim_fscanf
-
-    _fscanf_long:
-        movb (%r12), %al
-        incq %r12
-        cmpb $'f', %al
-        je _fscanf_double
-        cmpb $'d', %al
-        je _fscanf_long_int
-        jmp _fim_fscanf
-
-    _fscanf_short:
-        movb (%r12), %al
-        incq %r12
-        cmpb $'d', %al
-        je _fscanf_short_int
-        jmp _fim_fscanf
-
-    _fscanf_read:
-        movq $0, %rax
-        movq %rbx, %rdi
-        leaq entrada_scanf, %rsi
-        movq $32, %rdx
-        syscall
-        
-        cmpq $0, %rax
-        jle _fim_fscanf
-        ret
-
-    _fscanf_int:
-        call _fscanf_read
-        leaq entrada_scanf, %rdi
-        call _string_to_int
-        movl %eax, (%r13)
-        jmp _fim_fscanf
-
-    _fscanf_char:
-        call _fscanf_read
-        leaq entrada_scanf, %rdi
-        call _string_to_char
-        movw %ax, (%r13)
-        jmp _fim_fscanf
-
-    _fscanf_float:
-        call _fscanf_read
-        leaq entrada_scanf, %rdi
-        call _string_to_float
-        movss %xmm0, (%r13)
-        jmp _fim_fscanf
-
-    _fscanf_double:
-        call _fscanf_read
-        leaq entrada_scanf, %rdi
-        call _string_to_double
-        movsd %xmm0, (%r13)
-        jmp _fim_fscanf
-
-    _fscanf_long_int:
-        call _fscanf_read
-        leaq entrada_scanf, %rdi
-        call _string_to_long_int
-        movq %rax, (%r13)
-        jmp _fim_fscanf
-
-    _fscanf_short_int:
-        call _fscanf_read
-        leaq entrada_scanf, %rdi
-        call _string_to_short
-        movw %ax, (%r13)
-        jmp _fim_fscanf
-
-    _fim_fscanf:
-        popq %r13
-        popq %r12
-        popq %rbx
-        popq %rbp
-        ret
         popq %rbp
         ret

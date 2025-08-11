@@ -554,6 +554,25 @@ _descobre_flags:
     call _compara_tipos
     cmpq $1, %rax
     je _tipo_a
+
+    movq %r12, %rdi
+    leaq tipo_r_mais, %rsi
+    call _compara_tipos
+    cmpq $1, %rax
+    je _tipo_r_mais
+
+    movq %r12, %rdi
+    leaq tipo_w_mais, %rsi
+    call _compara_tipos
+    cmpq $1, %rax
+    je _tipo_w_mais
+
+    movq %r12, %rdi
+    leaq tipo_a_mais, %rsi
+    call _compara_tipos
+    cmpq $1, %rax
+    je _tipo_a_mais
+
     jmp _retorna_flag
 
     _tipo_r:
@@ -561,15 +580,34 @@ _descobre_flags:
         jmp _retorna_flag
 
     _tipo_w:
-        movq $1, %rax # somente escrita
+        movq $1, %rax # escrita
         orq  $64, %rax # criar
         orq  $512, %rax # truncar
         jmp _retorna_flag
 
     _tipo_a:
-        movq $1, %rax # somente escrita
-        orq  $64, %rax # criar
+        movq $1, %rax
+        orq  $64, %rax
         orq  $1024, %rax # anexar
+        jmp _retorna_flag
+
+    _tipo_r_mais:
+        movq $0, %rax
+        orq  $1, %rax
+        jmp _retorna_flag
+
+    _tipo_w_mais:
+        movq $1, %rax
+        orq  $64, %rax
+        orq  $512, %rax
+        orq  $0, %rax
+        jmp _retorna_flag
+
+    _tipo_a_mais:
+        movq $1, %rax
+        orq  $64, %rax
+        orq  $1024, %rax
+        orq  $0, %rax
         jmp _retorna_flag
 
     _retorna_flag:

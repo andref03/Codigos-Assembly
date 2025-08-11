@@ -163,10 +163,30 @@ _start:
         leaq arquivo1, %rdi
         leaq tipo_w, %rsi  # abre pra escrita
         call _fopen
-        movq %rax, %r10
+        movq %rax, %r10     # salva descritor de arquivo
+
+        # testei somente com int mesmo
+        movq %r10, %rdi
+        leaq formato_int, %rsi
+        movq $194783, %rdx  # valor pra escrever
+        call _fprintf
 
         movq %r10, %rdi
-        call _fclose  # fecha arquivo
+        call _fclose
+
+        leaq arquivo1, %rdi
+        leaq tipo_r, %rsi   # abre pra leitura
+        call _fopen
+        movq %rax, %r11
+
+        leaq entrada_scanf, %rdx
+
+        movq %r11, %rdi
+        leaq formato_int, %rsi
+        call _fscanf
+
+        movq %r11, %rdi
+        call _fclose
 
     _fim:
         # quebra de linha
@@ -1384,5 +1404,218 @@ _descobre_flags:
     _retorna_flag:
         popq %r12
         popq %rbx
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+_fprintf:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+
+    movq %rdi, %rbx
+    movq %rsi, %r12 # tipo
+    movq %rdx, %r13 # valor
+
+    # tipo
+    movb (%r12), %al
+    incq %r12
+    cmpb $'%', %al
+    jne _fim_fprintf
+
+    movb (%r12), %al
+    incq %r12
+    cmpb $'d', %al
+    je _fprintf_int
+    cmpb $'c', %al
+    je _fprintf_char
+    cmpb $'f', %al
+    je _fprintf_float
+    cmpb $'l', %al
+    je _fprintf_long
+    cmpb $'h', %al
+    je _fprintf_short
+    jmp _fim_fprintf
+
+    _fprintf_long:
+        movb (%r12), %al
+        incq %r12
+        cmpb $'f', %al
+        je _fprintf_double
+        cmpb $'d', %al
+        je _fprintf_long_int
+        jmp _fim_fprintf
+
+    _fprintf_short:
+        movb (%r12), %al
+        incq %r12
+        cmpb $'d', %al
+        je _fprintf_short_int
+        jmp _fim_fprintf
+
+    _fprintf_int:
+        movl %r13d, %edi
+        leaq resultado_printf, %rsi
+        call _int_to_string
+        jmp _escrever_resultado_fprintf
+
+    _fprintf_char:
+        movw %r13w, %di
+        leaq resultado_printf, %rsi
+        call _char_to_string
+        jmp _escrever_resultado_fprintf
+
+    _fprintf_float:
+        movss (%r13), %xmm0
+        leaq resultado_printf, %rsi
+        call _float_to_string
+        jmp _escrever_resultado_fprintf
+
+    _fprintf_double:
+        movsd (%r13), %xmm0
+        leaq resultado_printf, %rsi
+        call _double_to_string
+        jmp _escrever_resultado_fprintf
+
+    _fprintf_long_int:
+        movq (%r13), %rdi
+        leaq resultado_printf, %rsi
+        call _long_int_to_string
+        jmp _escrever_resultado_fprintf
+
+    _fprintf_short_int:
+        movw (%r13), %di
+        leaq resultado_printf, %rsi
+        call _short_to_string
+        jmp _escrever_resultado_fprintf
+
+    _escrever_resultado_fprintf:
+        leaq resultado_printf, %rdi
+        call _calcula_tamanho_str   # rax: tamanho da string
+        movq %rax, %rdx
+
+        movq $1, %rax
+        movq %rbx, %rdi
+        leaq resultado_printf, %rsi
+        syscall
+
+    _fim_fprintf:
+        popq %r13
+        popq %r12
+        popq %rbx
+        popq %rbp
+        ret
+
+# ---------------------------------------------------------------------
+
+_fscanf:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+
+    movq %rdi, %rbx
+    movq %rsi, %r12 # tipo
+    movq %rdx, %r13 # valor
+
+    # tipo
+    movb (%r12), %al
+    incq %r12
+    cmpb $'%', %al
+    jne _fim_fscanf
+
+    movb (%r12), %al
+    incq %r12
+    cmpb $'d', %al
+    je _fscanf_int
+    cmpb $'c', %al
+    je _fscanf_char
+    cmpb $'f', %al
+    je _fscanf_float
+    cmpb $'l', %al
+    je _fscanf_long
+    cmpb $'h', %al
+    je _fscanf_short
+    jmp _fim_fscanf
+
+    _fscanf_long:
+        movb (%r12), %al
+        incq %r12
+        cmpb $'f', %al
+        je _fscanf_double
+        cmpb $'d', %al
+        je _fscanf_long_int
+        jmp _fim_fscanf
+
+    _fscanf_short:
+        movb (%r12), %al
+        incq %r12
+        cmpb $'d', %al
+        je _fscanf_short_int
+        jmp _fim_fscanf
+
+    _fscanf_read:
+        movq $0, %rax
+        movq %rbx, %rdi
+        leaq entrada_scanf, %rsi
+        movq $32, %rdx
+        syscall
+        
+        cmpq $0, %rax
+        jle _fim_fscanf
+        ret
+
+    _fscanf_int:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_int
+        movl %eax, (%r13)
+        jmp _fim_fscanf
+
+    _fscanf_char:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_char
+        movw %ax, (%r13)
+        jmp _fim_fscanf
+
+    _fscanf_float:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_float
+        movss %xmm0, (%r13)
+        jmp _fim_fscanf
+
+    _fscanf_double:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_double
+        movsd %xmm0, (%r13)
+        jmp _fim_fscanf
+
+    _fscanf_long_int:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_long_int
+        movq %rax, (%r13)
+        jmp _fim_fscanf
+
+    _fscanf_short_int:
+        call _fscanf_read
+        leaq entrada_scanf, %rdi
+        call _string_to_short
+        movw %ax, (%r13)
+        jmp _fim_fscanf
+
+    _fim_fscanf:
+        popq %r13
+        popq %r12
+        popq %rbx
+        popq %rbp
+        ret
         popq %rbp
         ret
